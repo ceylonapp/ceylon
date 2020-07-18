@@ -39,9 +39,10 @@ async def run_agent(source, agent, independent):
         while True:
             message = await pub_sub.get_message()
             if message:
-                print(message)
-                # do something with the message
-                # await asyncio.sleep(0.001)  # be nice to the system :)
+                await source_instance.run_agent(request={
+                    "name": "From Ceylon Depend Agent",
+                    "message": message
+                }, response=response_stream)
 
 
 @click.command()

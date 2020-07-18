@@ -8,6 +8,7 @@ class HelloProcessAgent:
         print("process_agent_initiated", config)
 
     async def run_agent(self, request, response):
-        print(request)
-        print(response)
-        await response("start..")
+        print("request message ", request)
+        await response(data={
+            "response from process"
+        })
