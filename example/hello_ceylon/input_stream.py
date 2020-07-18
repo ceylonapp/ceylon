@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import time
 
 
 class HelloCeylonInputSourceAgent:

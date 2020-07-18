@@ -9,7 +9,7 @@ import click
 from importlib.machinery import SourceFileLoader
 
 
-async def publish_input_stream(source, agent):
+async def run_agent(source, agent, independent):
     logging.basicConfig(level=logging.DEBUG)
     client = aredis.StrictRedis()
 
@@ -19,20 +19,37 @@ async def publish_input_stream(source, agent):
         "ab": "TEST"
     })
 
-    async def input_stream(*args, **kwargs):
+    async def response_stream(*args, **kwargs):
         print(kwargs)
         await client.publish(agent, kwargs)
 
-    await source_instance.run_agent(request={
-        "name": "From Ceylon"
-    }, response=input_stream)
+    if independent:
+        await source_instance.run_agent(request={
+            "name": "From Ceylon"
+        }, response=response_stream)
+
+    else:
+        await client.flushdb()
+        pub_sub = client.pubsub()
+        subscribes = []
+        for r in source_instance.__dependents__:
+            subscribes.append(r.__name__)
+
+        await pub_sub.subscribe(*subscribes)
+        while True:
+            message = await pub_sub.get_message()
+            if message:
+                print(message)
+                # do something with the message
+                # await asyncio.sleep(0.001)  # be nice to the system :)
 
 
 @click.command()
 @click.option("--source", prompt="Input Stream source", help="Please define input streams")
 @click.option("--agent", prompt="Agent class name", help="Please define agent class")
-def run(source, agent):
-    asyncio.run(publish_input_stream(source, agent))
+@click.option("--independent/--dependent", default=False)
+def run(source, agent, independent):
+    asyncio.run(run_agent(source, agent, independent))
 
 
 if __name__ == '__main__':
