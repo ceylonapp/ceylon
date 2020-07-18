@@ -1,0 +1,10 @@
+stack:
+  name: Hello Ceylon
+  sources:
+    - a
+  actions:
+    - a
+  agents:
+    - a
+
+
