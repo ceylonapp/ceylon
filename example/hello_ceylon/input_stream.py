@@ -8,6 +8,7 @@ class HelloCeylonInputSourceAgent:
         print("input_stream_initiated", config)
 
     async def run_agent(self, request, response):
+        print("Init params ", request)
         name = request["name"]
         while True:
             await response(data={

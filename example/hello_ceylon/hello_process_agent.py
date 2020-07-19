@@ -8,7 +8,8 @@ class HelloProcessAgent:
         print("process_agent_initiated", config)
 
     async def run_agent(self, request, response):
-        print("request message ", request)
+        hello_input_message = request["messages"][HelloCeylonInputSourceAgent.__name__]
+        print("processing := ",hello_input_message)
         await response(data={
             "response from process"
         })
