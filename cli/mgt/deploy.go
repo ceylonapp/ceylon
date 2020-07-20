@@ -1,6 +1,7 @@
 package mgt
 
 import (
+	"context"
 	"fmt"
 	"github.com/docker/docker/client"
 	"log"
@@ -11,7 +12,8 @@ type DeployConfig struct {
 }
 
 type DeployManager struct {
-	Config DeployConfig
+	Config  DeployConfig
+	Context context.Context
 }
 
 func (dp *DeployManager) Deploy() error {
@@ -40,7 +42,7 @@ func (dp *DeployManager) Deploy() error {
 		"REDIS_PORT=6379",
 		"REDIS_DB=0",
 	}
-	err = buildImage(client, tags, dockerFile, packageFileDir, configFiles, fileDirs)
+	err = buildImage(dp.Context, client, tags, dockerFile, packageFileDir, configFiles, fileDirs)
 	err = runContainer(client, imageName, "test_1", "8080", inputEnv)
 	if err != nil {
 		return err

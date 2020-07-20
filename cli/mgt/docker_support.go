@@ -19,12 +19,10 @@ import (
 	"runtime"
 )
 
-func buildImage(client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string) error {
+func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string) error {
 
 	_, baseFilePath, _, _ := runtime.Caller(1)
 	dockerFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../%s", dockerFile))
-
-	ctx := context.Background()
 
 	// Create a buffer
 	buf := new(bytes.Buffer)
