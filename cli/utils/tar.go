@@ -67,38 +67,42 @@ func (ig *IgnoreList) match(path string) bool {
 	return false
 }
 
-func FileToTar(sourceFile string, tw *tar.Writer) error {
+func FileToTar(sourceFile string, prefix string, tw *tar.Writer) (string, error) {
 	// Create a filereader
 	sourceFileReader, err := os.Open(sourceFile)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Read the actual Dockerfile
 	readDockerFile, err := ioutil.ReadAll(sourceFileReader)
 	if err != nil {
-		return err
+		return "", err
 	}
 
+	_, fileName := filepath.Split(sourceFile)
+	log.Println(fileName)
+	fileName = fmt.Sprintf("%s%s", prefix, fileName)
+	log.Println(fileName)
 	// Make a TAR header for the file
 	tarHeader := &tar.Header{
-		Name: sourceFile,
+		Name: fileName,
 		Size: int64(len(readDockerFile)),
 	}
 
 	//Writes the header described for the TAR file
 	err = tw.WriteHeader(tarHeader)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Writes the dockerfile data to the TAR file
 	_, err = tw.Write(readDockerFile)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return err
+	return fileName, err
 }
 
 func DirToTar(sourceDir string,
@@ -123,8 +127,8 @@ func DirToTar(sourceDir string,
 	// walk path
 	return filepath.Walk(sourceDir, func(file string, fi os.FileInfo, err error) error {
 		file = strings.Replace(strings.Replace(file, sourceDir, "", -1), string("\\"), "/", -1)
-
 		fileName := strings.Replace(file, sourceDir, "", 1)
+
 		if strings.HasPrefix(fileName, "/") {
 			fileName = strings.Replace(fileName, "/", "", 1)
 		}
@@ -154,8 +158,8 @@ func DirToTar(sourceDir string,
 		}
 
 		// update the name to correctly reflect the desired destination when untaring
-
-		header.Name = file
+		log.Println(fileName)
+		header.Name = fileName
 		// write the header
 		if err := tw.WriteHeader(header); err != nil {
 			return err

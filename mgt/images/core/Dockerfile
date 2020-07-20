@@ -4,16 +4,16 @@ FROM python:3
 WORKDIR /usr/src/app
 
 # copy all the files to the container
-COPY mgt/bases/core .
-COPY mgt/images/core .
+COPY . .
 
+RUN ls .
 # install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r config/requirements.txt
 
 # define the port number the container should expose
 EXPOSE 5000
 
-RUN ls /usr/src/app
+RUN ls .
 
 # run the command
 CMD ["python", "./app.py"]
