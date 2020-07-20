@@ -11,9 +11,12 @@ from importlib.machinery import SourceFileLoader
 
 async def run_agent(source, agent, independent, read_params, init_params):
     logging.basicConfig(level=logging.DEBUG)
-    client = aredis.StrictRedis()
+    redis_host = os.environ.get('REDIS_HOST')
+    redis_port = os.environ.get('REDIS_PORT')
+    redis_db = os.environ.get('REDIS_DB')
+    client = aredis.StrictRedis(host=redis_host, port=int(redis_port),db=int(redis_db))
 
-    foo = SourceFileLoader("", f"{os.getcwd()}\\{source}").load_module()
+    foo = SourceFileLoader("", f"{os.getcwd()}/{source}").load_module()
     source_class = getattr(foo, agent)
     source_instance = source_class(config=init_params)
 
@@ -22,7 +25,6 @@ async def run_agent(source, agent, independent, read_params, init_params):
 
     if independent:
         await source_instance.run_agent(request=read_params, response=response_stream)
-
     else:
         await client.flushdb()
         pub_sub = client.pubsub()

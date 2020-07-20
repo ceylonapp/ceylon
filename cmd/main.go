@@ -205,7 +205,12 @@ func main() {
 		panic(err)
 		//log.Fatal(err.Error())
 	}
-	inputEnv := []string{fmt.Sprintf("LISTENINGPORT=%s", "8080")}
+	inputEnv := []string{
+		fmt.Sprintf("LISTENINGPORT=%s", "8080"),
+		"REDIS_HOST=192.168.8.100",
+		"REDIS_PORT=6379",
+		"REDIS_DB=0",
+	}
 	err = runContainer(client, imageName, "test_1", "8080", inputEnv)
 	if err != nil {
 		log.Println(err)

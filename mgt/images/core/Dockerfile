@@ -16,4 +16,4 @@ EXPOSE 5000
 RUN ls .
 
 # run the command
-CMD ["python", "./app.py"]
+CMD ["python", "./ceylon/source/run.py" ,"--source","./input_stream.py","--agent","HelloCeylonInputSourceAgent","--independent"]
