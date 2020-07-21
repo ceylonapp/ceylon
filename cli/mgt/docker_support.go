@@ -103,24 +103,24 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	return nil
 }
 
-func runContainer(client *client.Client, imagename string, containername string, port string, inputEnv []string) error {
+func runContainer(ctx context.Context, client *client.Client, imagename string, containername string, inputEnv []string) (string, error) {
 	// Define a PORT opening
-	newport, err := natting.NewPort("tcp", port)
-	if err != nil {
-		fmt.Println("Unable to create docker port")
-		return err
-	}
+	//newport, err := natting.NewPort("tcp", port)
+	//if err != nil {
+	//	fmt.Println("Unable to create docker port")
+	//	return err
+	//}
 
 	// Configured hostConfig:
 	// https://godoc.org/github.com/docker/docker/api/types/container#HostConfig
 	hostConfig := &container.HostConfig{
 		PortBindings: natting.PortMap{
-			newport: []natting.PortBinding{
-				{
-					HostIP:   "0.0.0.0",
-					HostPort: port,
-				},
-			},
+			//newport: []natting.PortBinding{
+			//	{
+			//		HostIP:   "0.0.0.0",
+			//		HostPort: port,
+			//	},
+			//},
 		},
 		RestartPolicy: container.RestartPolicy{
 			Name: "always",
@@ -142,17 +142,17 @@ func runContainer(client *client.Client, imagename string, containername string,
 	networkConfig.EndpointsConfig["bridge"] = gatewayConfig
 
 	// Define ports to be exposed (has to be same as hostconfig.portbindings.newport)
-	exposedPorts := map[natting.Port]struct{}{
-		newport: struct{}{},
-	}
+	//exposedPorts := map[natting.Port]struct{}{
+	//	newport: struct{}{},
+	//}
 
 	// Configuration
 	// https://godoc.org/github.com/docker/docker/api/types/container#Config
 	config := &container.Config{
-		Image:        imagename,
-		Env:          inputEnv,
-		ExposedPorts: exposedPorts,
-		Hostname:     fmt.Sprintf("%s-hostnameexample", imagename),
+		Image: imagename,
+		Env:   inputEnv,
+		//ExposedPorts: exposedPorts,
+		Hostname: fmt.Sprintf("%s-hostnameexample", imagename),
 	}
 
 	// Creating the actual container. This is "nil,nil,nil" in every example.
@@ -166,12 +166,9 @@ func runContainer(client *client.Client, imagename string, containername string,
 
 	if err != nil {
 		log.Println(err)
-		return err
+		return "", err
 	}
-
 	// Run the actual container
-	client.ContainerStart(context.Background(), cont.ID, types.ContainerStartOptions{})
-	log.Printf("Container %s is created", cont.ID)
-
-	return nil
+	client.ContainerStart(ctx, cont.ID, types.ContainerStartOptions{})
+	return cont.ID, nil
 }

@@ -19,10 +19,16 @@ func (dp *DeployManager) Deploy() error {
 	if err != nil {
 		log.Println(err)
 	}
-	fmt.Println(path)
+
+	configPath := fmt.Sprintf("%s/%s", path, "ceylon.yaml")
+
+	deployConfig, err := config.NewConfig(configPath)
+	if err != nil {
+		panic(err)
+	}
 
 	packageFileDir := "./"
-	imageName := "hello_world_agents"
+	imageName := deployConfig.Name
 
 	client, err := client.NewEnvClient()
 	if err != nil {
@@ -34,21 +40,28 @@ func (dp *DeployManager) Deploy() error {
 	dockerFile := "mgt/images/core/Dockerfile"
 	configFiles := []string{"mgt/images/core/requirements.txt"}
 	fileDirs := []string{"mgt/bases/core"}
-	inputEnv := []string{
-		fmt.Sprintf("LISTENINGPORT=%s", "8080"),
-		"REDIS_HOST=192.168.8.100",
-		"REDIS_PORT=6379",
-		"REDIS_DB=0",
-	}
 	err = buildImage(dp.Context, client, tags, dockerFile, packageFileDir, configFiles, fileDirs)
 	if err != nil {
 		log.Fatal(err)
 		return err
 	}
-	err = runContainer(client, imageName, "test_1", "8080", inputEnv)
-	if err != nil {
-		log.Fatal(err)
-		return err
+
+	log.Println(deployConfig.Stack)
+	for _, agent := range deployConfig.Stack.Agents {
+		//log.Println(agent)
+		inputEnv := []string{
+			fmt.Sprintf("CEYLON_SOURCE=%s", agent.Source),
+			fmt.Sprintf("CEYLON_AGENT=%s", agent.Name),
+			"REDIS_HOST=192.168.8.100",
+			"REDIS_PORT=6379",
+			"REDIS_DB=0",
+		}
+		id, err := runContainer(dp.Context, client, imageName, "", inputEnv)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+		log.Println("Create container id ", id)
 	}
 	return nil
 }

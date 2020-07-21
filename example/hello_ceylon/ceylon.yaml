@@ -1,13 +1,21 @@
-name: Hello Ceylon
+name: hello_ceylon_mas
 stack:
   agents:
-    - input_agent:
+    input_agent:
         source: input_stream.py
         name: HelloCeylonInputSourceAgent
-        dependent: independent
-    - process_agent:
+    process_agent:
         source: hello_process_agent.py
         name: HelloProcessAgent
-        dependent: dependent
-
+#
+#stack:
+#  agents: {
+#    python_app: {
+#      source: sample,
+#      name: sample_name
+#    }, python_app2: {
+#      source: sample1,
+#      name: sample1_name
+#    }
+#  }
 

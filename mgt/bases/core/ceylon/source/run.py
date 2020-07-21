@@ -2,26 +2,31 @@
 import asyncio
 import logging
 import os
+import sys
+from importlib.machinery import SourceFileLoader
 
 import aredis
 import click
 
-from importlib.machinery import SourceFileLoader
-
 
 async def run_agent(source, agent, read_params, init_params):
+    sys.path.append(os.path.abspath(os.getcwd()))  # append source path to system path
+    print("system path ", sys.path)
     logging.basicConfig(level=logging.DEBUG)
     redis_host = os.environ.get('REDIS_HOST')
     redis_port = os.environ.get('REDIS_PORT')
     redis_db = os.environ.get('REDIS_DB')
-    client = aredis.StrictRedis(host=redis_host, port=int(redis_port),db=int(redis_db))
+    client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
+    print("Agent Module:= ", f"{os.getcwd()}/{source}")
+    print("Agent := ", agent)
 
     foo = SourceFileLoader("", f"{os.getcwd()}/{source}").load_module()
+
     source_class = getattr(foo, agent)
     source_instance = source_class(config=init_params)
-    independent=True
+    independent = True
     if hasattr(source_instance, '__dependents__'):
-        independent=False
+        independent = False
 
     async def response_stream(*args, **kwargs):
         await client.publish(agent, kwargs)
@@ -54,11 +59,20 @@ async def run_agent(source, agent, read_params, init_params):
 
 
 @click.command()
-@click.option("--source", prompt="Input Stream source", help="Please define input streams")
-@click.option("--agent", prompt="Agent class name", help="Please define agent class")
+@click.option("--source", default=None, help="Please define input streams")
+@click.option("--agent", default=None, help="Please define agent class")
+@click.option("--override/--no-override", default=False, help="Please define agent class")
 @click.option("--read-params", default={"name": "Agent Framework Reading"})
 @click.option("--init-params", default={"name": "Agent Framework Init"})
-def run(source, agent,  read_params, init_params):
+def run(source, agent, override, read_params, init_params):
+    if override:
+        source = os.environ.get('CEYLON_SOURCE')
+    if override:
+        agent = os.environ.get('CEYLON_AGENT')
+
+    source = f"{source}"
+    agent = f"{agent}"
+
     asyncio.run(run_agent(source, agent, read_params, init_params))
 
 

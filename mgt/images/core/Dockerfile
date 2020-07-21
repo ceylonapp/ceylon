@@ -1,4 +1,4 @@
-FROM python:3
+FROM python:3.7.8-buster
 
 # set a directory for the app
 WORKDIR /usr/src/app
@@ -14,6 +14,6 @@ RUN pip install --no-cache-dir -r config/requirements.txt
 EXPOSE 5000
 
 RUN ls .
-
+#RUN chmod +x ./run.sh
 # run the command
-CMD ["python", "./ceylon/source/run.py" ,"--source","./input_stream.py","--agent","HelloCeylonInputSourceAgent"]
+CMD ["/bin/sh","run.sh"]

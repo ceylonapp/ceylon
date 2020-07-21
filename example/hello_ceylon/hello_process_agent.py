@@ -1,3 +1,5 @@
+import sys
+print(sys.path)
 from input_stream import HelloCeylonInputSourceAgent
 
 
