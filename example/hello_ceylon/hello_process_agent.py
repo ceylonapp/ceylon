@@ -1,5 +1,3 @@
-import sys
-print(sys.path)
 from input_stream import HelloCeylonInputSourceAgent
 
 
@@ -13,5 +11,5 @@ class HelloProcessAgent:
         hello_input_message = request["messages"][HelloCeylonInputSourceAgent.__name__]
         print("processing := ",hello_input_message)
         await response(data={
-            "response from process"
+            f"response from process agent ${hello_input_message}"
         })

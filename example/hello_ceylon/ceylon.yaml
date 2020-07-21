@@ -7,15 +7,7 @@ stack:
     process_agent:
         source: hello_process_agent.py
         name: HelloProcessAgent
-#
-#stack:
-#  agents: {
-#    python_app: {
-#      source: sample,
-#      name: sample_name
-#    }, python_app2: {
-#      source: sample1,
-#      name: sample1_name
-#    }
-#  }
+    second_process_agent:
+        source: second_process_agent.py
+        name: HelloSecondProcessAgent
 

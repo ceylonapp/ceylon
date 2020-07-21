@@ -47,7 +47,7 @@ func (dp *DeployManager) Deploy() error {
 	}
 
 	log.Println(deployConfig.Stack)
-	for _, agent := range deployConfig.Stack.Agents {
+	for agentName, agent := range deployConfig.Stack.Agents {
 		//log.Println(agent)
 		inputEnv := []string{
 			fmt.Sprintf("CEYLON_SOURCE=%s", agent.Source),
@@ -56,7 +56,7 @@ func (dp *DeployManager) Deploy() error {
 			"REDIS_PORT=6379",
 			"REDIS_DB=0",
 		}
-		id, err := runContainer(dp.Context, client, imageName, "", inputEnv)
+		id, err := runContainer(dp.Context, client, imageName, fmt.Sprintf("%s_agent", agentName), inputEnv)
 		if err != nil {
 			log.Fatal(err)
 			return err
