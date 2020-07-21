@@ -22,7 +22,7 @@ import (
 func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string) error {
 
 	_, baseFilePath, _, _ := runtime.Caller(1)
-	dockerFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../%s", dockerFile))
+	dockerFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", dockerFile))
 
 	// Create a buffer
 	buf := new(bytes.Buffer)
@@ -35,7 +35,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	}
 
 	for _, configFile := range configFiles {
-		configFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../%s", configFile))
+		configFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", configFile))
 		configFile, err = utils.FileToTar(configFile, "config/", tw)
 		if err != nil {
 			return err
@@ -44,7 +44,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 
 	// Add File Dirs
 	for _, configDir := range configDirs {
-		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../%s", configDir))
+		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", configDir))
 		err = utils.DirToTar(configDir, tw)
 		if err != nil {
 			return err

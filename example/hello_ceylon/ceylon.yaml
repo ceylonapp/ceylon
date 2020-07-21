@@ -1,10 +1,13 @@
+name: Hello Ceylon
 stack:
-  name: Hello Ceylon
-  sources:
-    - a
-  actions:
-    - a
   agents:
-    - a
+    - input_agent:
+        source: input_stream.py
+        name: HelloCeylonInputSourceAgent
+        dependent: independent
+    - process_agent:
+        source: hello_process_agent.py
+        name: HelloProcessAgent
+        dependent: dependent
 
 

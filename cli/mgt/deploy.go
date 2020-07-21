@@ -1,6 +1,7 @@
 package mgt
 
 import (
+	"ceylon/cli/config"
 	"context"
 	"fmt"
 	"github.com/docker/docker/client"
@@ -8,11 +9,8 @@ import (
 	"os"
 )
 
-type DeployConfig struct {
-}
-
 type DeployManager struct {
-	Config  DeployConfig
+	Config  config.DeployConfig
 	Context context.Context
 }
 
@@ -43,8 +41,13 @@ func (dp *DeployManager) Deploy() error {
 		"REDIS_DB=0",
 	}
 	err = buildImage(dp.Context, client, tags, dockerFile, packageFileDir, configFiles, fileDirs)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
 	err = runContainer(client, imageName, "test_1", "8080", inputEnv)
 	if err != nil {
+		log.Fatal(err)
 		return err
 	}
 	return nil

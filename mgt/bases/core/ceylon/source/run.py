@@ -9,7 +9,7 @@ import click
 from importlib.machinery import SourceFileLoader
 
 
-async def run_agent(source, agent, independent, read_params, init_params):
+async def run_agent(source, agent, read_params, init_params):
     logging.basicConfig(level=logging.DEBUG)
     redis_host = os.environ.get('REDIS_HOST')
     redis_port = os.environ.get('REDIS_PORT')
@@ -19,6 +19,9 @@ async def run_agent(source, agent, independent, read_params, init_params):
     foo = SourceFileLoader("", f"{os.getcwd()}/{source}").load_module()
     source_class = getattr(foo, agent)
     source_instance = source_class(config=init_params)
+    independent=True
+    if hasattr(source_instance, '__dependents__'):
+        independent=False
 
     async def response_stream(*args, **kwargs):
         await client.publish(agent, kwargs)
@@ -53,11 +56,10 @@ async def run_agent(source, agent, independent, read_params, init_params):
 @click.command()
 @click.option("--source", prompt="Input Stream source", help="Please define input streams")
 @click.option("--agent", prompt="Agent class name", help="Please define agent class")
-@click.option("--independent/--dependent", default=False)
 @click.option("--read-params", default={"name": "Agent Framework Reading"})
 @click.option("--init-params", default={"name": "Agent Framework Init"})
-def run(source, agent, independent, read_params, init_params):
-    asyncio.run(run_agent(source, agent, independent, read_params, init_params))
+def run(source, agent,  read_params, init_params):
+    asyncio.run(run_agent(source, agent, read_params, init_params))
 
 
 if __name__ == '__main__':
