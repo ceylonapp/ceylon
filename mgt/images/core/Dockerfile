@@ -10,10 +10,10 @@ RUN ls .
 # install dependencies
 RUN pip install --no-cache-dir -r config/requirements.txt
 
-# define the port number the container should expose
-EXPOSE 5000
-
 RUN ls .
 #RUN chmod +x ./run.sh
 # run the command
 CMD ["/bin/sh","run.sh"]
+{{- range $val := .Expose }}
+EXPOSE {{$val}}
+{{end}}

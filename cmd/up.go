@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var deploy = &cobra.Command{
-	Use: "deploy",
+var up = &cobra.Command{
+	Use: "up",
 	Run: func(cmd *cobra.Command, args []string) {
 
 		deployManager := mgt.DeployManager{

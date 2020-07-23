@@ -66,24 +66,13 @@ func (ig *IgnoreList) match(path string) bool {
 
 	return false
 }
-
-func FileToTar(sourceFile string, prefix string, tw *tar.Writer) (string, error) {
-	// Create a filereader
-	sourceFileReader, err := os.Open(sourceFile)
-	if err != nil {
-		return "", err
-	}
-
+func FileObjToTar(tw *tar.Writer, fileReader io.Reader, fileName string) error {
 	// Read the actual Dockerfile
-	readDockerFile, err := ioutil.ReadAll(sourceFileReader)
+	readDockerFile, err := ioutil.ReadAll(fileReader)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	_, fileName := filepath.Split(sourceFile)
-	log.Println(fileName)
-	fileName = fmt.Sprintf("%s%s", prefix, fileName)
-	log.Println(fileName)
 	// Make a TAR header for the file
 	tarHeader := &tar.Header{
 		Name: fileName,
@@ -93,11 +82,28 @@ func FileToTar(sourceFile string, prefix string, tw *tar.Writer) (string, error)
 	//Writes the header described for the TAR file
 	err = tw.WriteHeader(tarHeader)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// Writes the dockerfile data to the TAR file
 	_, err = tw.Write(readDockerFile)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FileToTar(sourceFile string, prefix string, tw *tar.Writer) (string, error) {
+
+	_, fileName := filepath.Split(sourceFile)
+	fileName = fmt.Sprintf("%s%s", prefix, fileName)
+	// Create a filereader
+	sourceFileReader, err := os.Open(sourceFile)
+	if err != nil {
+		return "", err
+	}
+
+	err = FileObjToTar(tw, sourceFileReader, fileName)
 	if err != nil {
 		return "", err
 	}

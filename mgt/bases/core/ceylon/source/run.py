@@ -129,11 +129,17 @@ def run(source, agent, path, expose, type, override, read_params, init_params):
     if override:
         source = os.environ.get('CEYLON_SOURCE')
         agent = os.environ.get('CEYLON_AGENT')
-        path = os.environ.get('CEYLON_PATH')
-        expose = os.environ.get('CEYLON_EXPOSE')
+        if os.environ.get("CEYLON_PATH") != "":
+            path = os.environ.get('CEYLON_PATH')
+        if os.environ.get("CEYLON_EXPOSE") != "":
+            expose = os.environ.get('CEYLON_EXPOSE')
+        if os.environ.get("CEYLON_TYPE") != "":
+            type = os.environ.get('CEYLON_TYPE')
 
     source = f"{source}"
     agent = f"{agent}"
+    print("source ", source, "agent", agent, "read_params", read_params, "init_params", init_params, "path", path,
+          "expose", expose, "type", type)
 
     asyncio.run(run_agent(source, agent, read_params, init_params, path, expose, type))
 

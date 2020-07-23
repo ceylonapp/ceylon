@@ -1,8 +1,6 @@
 name: hello_ceylon_mas
 stack:
   agents:
-    db_agent:
-      source: system
     input_agent:
       source: input_stream.py
       name: HelloCeylonInputSourceAgent
@@ -16,6 +14,8 @@ stack:
     user_input_agent:
       source: user_input.py
       name: UserInputAgent
-      expose: 4545
-      path: hello_api
-      type: websocket
+      expose: "4545"
+      path: /hello_api
+      type: ws
+  ports:
+    - "4545"

@@ -40,7 +40,7 @@ func (dp *DeployManager) Deploy() error {
 	dockerFile := "mgt/images/core/Dockerfile"
 	configFiles := []string{"mgt/images/core/requirements.txt"}
 	fileDirs := []string{"mgt/bases/core"}
-	err = buildImage(dp.Context, client, tags, dockerFile, packageFileDir, configFiles, fileDirs)
+	err = buildImage(dp.Context, client, tags, dockerFile, packageFileDir, configFiles, fileDirs, deployConfig.Stack.Ports)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -56,7 +56,29 @@ func (dp *DeployManager) Deploy() error {
 			"REDIS_PORT=6379",
 			"REDIS_DB=0",
 		}
-		id, err := runContainer(dp.Context, client, imageName, fmt.Sprintf("%s_agent", agentName), inputEnv)
+
+		if agent.Path != "" {
+			inputEnv = append(inputEnv, fmt.Sprintf("CEYLON_PATH=%s", agent.Path))
+		}
+		if agent.Expose != "" {
+			inputEnv = append(inputEnv, fmt.Sprintf("CEYLON_EXPOSE=%s", agent.Expose))
+		}
+		if agent.Type != "" {
+			inputEnv = append(inputEnv, fmt.Sprintf("CEYLON_TYPE=%s", agent.Type))
+		}
+		if agent.Version != "" {
+			inputEnv = append(inputEnv, fmt.Sprintf("CEYLON_VERSION=%s", agent.Version))
+		}
+
+		containerName := fmt.Sprintf("%s_agent", agentName)
+		println(agentName, containerName)
+
+		err = rmContainer(dp.Context, client, containerName)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		id, err := runContainer(dp.Context, client, imageName, containerName, inputEnv, agent.Expose)
 		if err != nil {
 			log.Fatal(err)
 			return err

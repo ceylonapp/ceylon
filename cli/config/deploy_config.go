@@ -10,10 +10,15 @@ import (
 )
 
 type Agent struct {
-	Source string `yaml:"source"`
-	Name   string `yaml:"name"`
+	Source  string `yaml:"source"`
+	Name    string `yaml:"name"`
+	Expose  string `yaml:"expose"`
+	Path    string `yaml:"path"`
+	Type    string `yaml:"type"`
+	Version string `yaml:"version"`
 }
 type Stack struct {
+	Ports  []string         `yaml:"ports,flow"`
 	Agents map[string]Agent `yaml:"agents,flow"`
 }
 type DeployConfig struct {
@@ -41,10 +46,12 @@ func NewConfig(configPath string) (*DeployConfig, error) {
 	b, _ := yaml.Marshal(DeployConfig{
 		Name: "ABB",
 		Stack: Stack{
+			Ports: []string{"4554", "4545"},
 			Agents: map[string]Agent{
 				"python_app": {
 					Source: "sample",
 					Name:   "sample_name",
+					Expose: "4545",
 				},
 				"python_app2": {
 					Source: "sample1",

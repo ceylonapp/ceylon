@@ -9,7 +9,7 @@ class UserInputAgent:
     processed_amount = 0
 
     def __init__(self, config=None):
-        print("2nd process_agent_initiated", config)
+        print("User input agent", config)
 
     async def accept_message(self, agent, message):
         self.processed_amount = message["data"]["process_amount"]

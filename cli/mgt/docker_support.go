@@ -13,23 +13,60 @@ import (
 	"github.com/docker/docker/client"
 	natting "github.com/docker/go-connections/nat"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
+	"text/template"
 )
 
-func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string) error {
+func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string, expose []string) error {
 
 	_, baseFilePath, _, _ := runtime.Caller(1)
-	dockerFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", dockerFile))
+	dockerFilePath := path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", dockerFile))
+	content, err := ioutil.ReadFile(dockerFilePath)
+	if err != nil {
+		println(err.Error())
+	}
+
+	tmpl, err := template.New("Dockerfile").Parse(string(content))
+	if err != nil {
+		println(err.Error())
+	}
+
+	//out := bufio.
+	var tpl bytes.Buffer
+	err = tmpl.Execute(&tpl, struct {
+		Expose []string
+	}{
+		Expose: expose,
+	})
+	if err != nil {
+		println(err.Error())
+	}
+
+	tmpDockerFIle, err := ioutil.TempFile("./", "Dockerfile")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Remove(tmpDockerFIle.Name())
+	err = ioutil.WriteFile(tmpDockerFIle.Name(), tpl.Bytes(), 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(tmpDockerFIle.Name())
+
+	_, fileName := filepath.Split(dockerFilePath)
+	fileName = fmt.Sprintf("%s%s", "config/", fileName)
 
 	// Create a buffer
 	buf := new(bytes.Buffer)
 	tw := tar.NewWriter(buf)
 	defer tw.Close()
 
-	dockerFile, err := utils.FileToTar(dockerFile, "config/", tw)
+	err = utils.FileObjToTar(tw, bytes.NewReader(tpl.Bytes()), fileName)
 	if err != nil {
 		return err
 	}
@@ -78,7 +115,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 		Tags:       tags,
 		NoCache:    true,
 		Remove:     true,
-		Dockerfile: dockerFile,
+		Dockerfile: tmpDockerFIle.Name(),
 		Context:    dockerFileTarReader,
 	}
 
@@ -103,25 +140,46 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	return nil
 }
 
-func runContainer(ctx context.Context, client *client.Client, imagename string, containername string, inputEnv []string) (string, error) {
+func rmContainer(ctx context.Context, client *client.Client, containername string) error {
+	err := client.ContainerRemove(ctx, containername, types.ContainerRemoveOptions{
+		RemoveVolumes: false,
+		RemoveLinks:   false,
+		Force:         true,
+	})
+	return err
+}
+
+func runContainer(ctx context.Context, client *client.Client, imagename string, containername string, inputEnv []string, expose string) (string, error) {
 	// Define a PORT opening
-	//newport, err := natting.NewPort("tcp", port)
-	//if err != nil {
-	//	fmt.Println("Unable to create docker port")
-	//	return err
-	//}
+	portBindings := natting.PortMap{}
+	exposedPorts := map[natting.Port]struct{}{}
+
+	if expose != "" {
+		exposeList := make([]string, 0)
+		exposeList = append(exposeList, expose)
+
+		for _, port := range exposeList {
+			newport, err := natting.NewPort("tcp", port)
+			if err != nil {
+				fmt.Println("Unable to create docker port")
+				return "", err
+			}
+
+			portBindings[newport] = []natting.PortBinding{
+				{
+					HostIP:   "0.0.0.0",
+					HostPort: port,
+				},
+			}
+
+			exposedPorts[newport] = struct{}{}
+		}
+	}
 
 	// Configured hostConfig:
 	// https://godoc.org/github.com/docker/docker/api/types/container#HostConfig
 	hostConfig := &container.HostConfig{
-		PortBindings: natting.PortMap{
-			//newport: []natting.PortBinding{
-			//	{
-			//		HostIP:   "0.0.0.0",
-			//		HostPort: port,
-			//	},
-			//},
-		},
+		PortBindings: portBindings,
 		RestartPolicy: container.RestartPolicy{
 			Name: "always",
 		},
@@ -142,17 +200,14 @@ func runContainer(ctx context.Context, client *client.Client, imagename string, 
 	networkConfig.EndpointsConfig["bridge"] = gatewayConfig
 
 	// Define ports to be exposed (has to be same as hostconfig.portbindings.newport)
-	//exposedPorts := map[natting.Port]struct{}{
-	//	newport: struct{}{},
-	//}
 
 	// Configuration
 	// https://godoc.org/github.com/docker/docker/api/types/container#Config
 	config := &container.Config{
-		Image: imagename,
-		Env:   inputEnv,
-		//ExposedPorts: exposedPorts,
-		Hostname: fmt.Sprintf("%s-hostnameexample", imagename),
+		Image:        imagename,
+		Env:          inputEnv,
+		ExposedPorts: exposedPorts,
+		Hostname:     fmt.Sprintf("%s-hostnameexample", imagename),
 	}
 
 	// Creating the actual container. This is "nil,nil,nil" in every example.
