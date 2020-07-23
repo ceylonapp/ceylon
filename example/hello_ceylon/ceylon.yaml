@@ -18,3 +18,4 @@ stack:
       name: UserInputAgent
       expose: 4545
       path: hello_api
+      type: websocket
