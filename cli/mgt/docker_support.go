@@ -17,23 +17,42 @@ import (
 	"log"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 	"text/template"
 )
 
-func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string, expose []string) error {
+func rmImage(ctx context.Context, client *client.Client, imageName string, isPruneChildren bool) error {
 
+	deleted, err := client.ImageRemove(ctx, imageName, types.ImageRemoveOptions{
+		Force:         true,
+		PruneChildren: isPruneChildren,
+	})
+
+	for _, imageDelete := range deleted {
+		log.Println("Image deleted", imageDelete.Deleted)
+		log.Println("Image untaged", imageDelete.Untagged)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildDockerImage(dockerFile string, expose []string) (string, error) {
 	_, baseFilePath, _, _ := runtime.Caller(1)
 	dockerFilePath := path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", dockerFile))
 	content, err := ioutil.ReadFile(dockerFilePath)
 	if err != nil {
 		println(err.Error())
+		return "", err
 	}
 
 	tmpl, err := template.New("Dockerfile").Parse(string(content))
 	if err != nil {
 		println(err.Error())
+		return "", err
 	}
 
 	//out := bufio.
@@ -45,35 +64,43 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	})
 	if err != nil {
 		println(err.Error())
+		return "", err
 	}
 
 	tmpDockerFIle, err := ioutil.TempFile("./", "Dockerfile")
 	if err != nil {
-		log.Fatal(err)
+		println(err.Error())
+		return "", err
 	}
 	defer os.Remove(tmpDockerFIle.Name())
 	err = ioutil.WriteFile(tmpDockerFIle.Name(), tpl.Bytes(), 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(tmpDockerFIle.Name())
 
-	_, fileName := filepath.Split(dockerFilePath)
-	fileName = fmt.Sprintf("%s%s", "config/", fileName)
+	if err != nil {
+		println(err.Error())
+		return "", err
+	}
+	return tmpDockerFIle.Name(), nil
+}
+
+func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string) error {
+	_, baseFilePath, _, _ := runtime.Caller(1)
 
 	// Create a buffer
 	buf := new(bytes.Buffer)
 	tw := tar.NewWriter(buf)
 	defer tw.Close()
 
-	err = utils.FileObjToTar(tw, bytes.NewReader(tpl.Bytes()), fileName)
-	if err != nil {
-		return err
-	}
+	//_, fileName := filepath.Split(dockerFilePath)
+	//fileName = fmt.Sprintf("%s%s", "config/", fileName)
+
+	//err = utils.FileObjToTar(tw, bytes.NewReader(tpl.Bytes()), fileName)
+	//if err != nil {
+	//	return err
+	//}
 
 	for _, configFile := range configFiles {
 		configFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", configFile))
-		configFile, err = utils.FileToTar(configFile, "config/", tw)
+		_, err := utils.FileToTar(configFile, "config/", tw)
 		if err != nil {
 			return err
 		}
@@ -82,13 +109,13 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	// Add File Dirs
 	for _, configDir := range configDirs {
 		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", configDir))
-		err = utils.DirToTar(configDir, tw)
+		err := utils.DirToTar(configDir, tw)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = utils.DirToTar(sourceDir, tw)
+	err := utils.DirToTar(sourceDir, tw)
 	if err != nil {
 		return err
 	}
@@ -115,7 +142,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 		Tags:       tags,
 		NoCache:    true,
 		Remove:     true,
-		Dockerfile: tmpDockerFIle.Name(),
+		Dockerfile: dockerFile,
 		Context:    dockerFileTarReader,
 	}
 
@@ -133,6 +160,11 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	// Read the STDOUT from the build process
 	defer imageBuildResponse.Body.Close()
 	_, err = io.Copy(os.Stdout, imageBuildResponse.Body)
+	if err != nil {
+		return err
+	}
+
+	err = tw.Close()
 	if err != nil {
 		return err
 	}

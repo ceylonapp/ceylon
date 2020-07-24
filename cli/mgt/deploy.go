@@ -12,9 +12,19 @@ import (
 type DeployManager struct {
 	Config  config.DeployConfig
 	Context context.Context
+	Client  *client.Client
 }
 
-func (dp *DeployManager) Deploy() error {
+func (dp *DeployManager) Init() error {
+	cl, err := client.NewEnvClient()
+	dp.Client = cl
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (dp *DeployManager) ReadConfig() (*config.DeployConfig, error) {
 	path, err := os.Getwd()
 	if err != nil {
 		log.Println(err)
@@ -26,25 +36,40 @@ func (dp *DeployManager) Deploy() error {
 	if err != nil {
 		panic(err)
 	}
+	return deployConfig, nil
+}
+
+func (dp *DeployManager) Deploy() error {
+	err := dp.Init()
+	if err != nil {
+		panic(err)
+	}
+
+	deployConfig, err := dp.ReadConfig()
+	if err != nil {
+		panic(err)
+	}
 
 	packageFileDir := "./"
 	imageName := deployConfig.Name
-
-	client, err := client.NewEnvClient()
-	if err != nil {
-		return err
-	}
 
 	// Client, imagename and Dockerfile location
 	tags := []string{imageName}
 	dockerFile := "mgt/images/core/Dockerfile"
 	configFiles := []string{"mgt/images/core/requirements.txt"}
 	fileDirs := []string{"mgt/bases/core"}
-	err = buildImage(dp.Context, client, tags, dockerFile, packageFileDir, configFiles, fileDirs, deployConfig.Stack.Ports)
+
+	dockerFile, err = buildDockerImage(dockerFile, deployConfig.Stack.Ports)
 	if err != nil {
 		log.Fatal(err)
 		return err
 	}
+	err = buildImage(dp.Context, dp.Client, tags, dockerFile, packageFileDir, configFiles, fileDirs)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	os.Remove(dockerFile)
 
 	log.Println(deployConfig.Stack)
 	for agentName, agent := range deployConfig.Stack.Agents {
@@ -73,17 +98,45 @@ func (dp *DeployManager) Deploy() error {
 		containerName := fmt.Sprintf("%s_agent", agentName)
 		println(agentName, containerName)
 
-		err = rmContainer(dp.Context, client, containerName)
+		err = rmContainer(dp.Context, dp.Client, containerName)
 		if err != nil {
 			log.Println(err)
-			return err
 		}
-		id, err := runContainer(dp.Context, client, imageName, containerName, inputEnv, agent.Expose)
+		id, err := runContainer(dp.Context, dp.Client, imageName, containerName, inputEnv, agent.Expose)
 		if err != nil {
 			log.Fatal(err)
 			return err
 		}
 		log.Println("Create container id ", id)
 	}
+	return nil
+}
+
+func (dp *DeployManager) Destroy(isPrune bool) error {
+	err := dp.Init()
+	if err != nil {
+		panic(err)
+	}
+	deployConfig, err := dp.ReadConfig()
+	if err != nil {
+		panic(err)
+	}
+	for agentName, _ := range deployConfig.Stack.Agents {
+		containerName := fmt.Sprintf("%s_agent", agentName)
+		err = rmContainer(dp.Context, dp.Client, containerName)
+		if err != nil {
+			log.Println(err.Error())
+		} else {
+			log.Println("Container removed ", containerName)
+		}
+	}
+
+	imageName := deployConfig.Name
+
+	err = rmImage(dp.Context, dp.Client, imageName, isPrune)
+	if err != nil {
+		log.Println(err.Error())
+	}
+
 	return nil
 }

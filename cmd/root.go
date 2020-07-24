@@ -44,7 +44,10 @@ to quickly create a Cobra application.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	rootCmd.AddCommand(up)
+	rm.Flags().Bool("prune", false, "Remove all child images")
+	viper.BindPFlag("port", rm.Flags().Lookup("prune"))
+
+	rootCmd.AddCommand(up, rm)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
