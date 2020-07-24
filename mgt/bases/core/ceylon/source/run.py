@@ -45,6 +45,7 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
 
     def ws_response_stream(ws):
         async def _response_stream(*args, **kwargs):
+            print(ws.status)
             await ws.send_json(kwargs)
             await client.publish(agent, kwargs)
 

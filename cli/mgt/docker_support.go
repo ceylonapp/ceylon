@@ -19,12 +19,22 @@ import (
 	"path"
 	"runtime"
 	"text/template"
+	"time"
 )
 
 func attachToNetwork(ctx context.Context, client *client.Client, networkName string, containerId string, links []string) error {
 	err := client.NetworkConnect(ctx, networkName, containerId, &network.EndpointSettings{
 		Links: links,
 	})
+	return err
+}
+func deAttachToNetwork(ctx context.Context, client *client.Client, networkName string, containerId string) error {
+	err := client.NetworkDisconnect(ctx, networkName, containerId, true)
+	return err
+}
+func stopContainer(ctx context.Context, client *client.Client, containerId string) error {
+	timeDuration := time.Second * 10
+	err := client.ContainerStop(ctx, containerId, &timeDuration)
 	return err
 }
 func rmNetwork(ctx context.Context, client *client.Client, networkName string) error {
@@ -296,8 +306,18 @@ func runContainer(ctx context.Context, client *client.Client, imagename string, 
 		log.Println(err)
 		return "", err
 	}
-	// Run the actual container
-	client.ContainerStart(ctx, cont.ID, types.ContainerStartOptions{})
 
 	return cont.ID, nil
+}
+
+func startContainer(ctx context.Context, client *client.Client, containername string) error {
+	// Run the actual container
+	err := client.ContainerStart(ctx, containername, types.ContainerStartOptions{})
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
 }
