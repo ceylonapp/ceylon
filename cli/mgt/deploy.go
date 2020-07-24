@@ -71,13 +71,42 @@ func (dp *DeployManager) Deploy() error {
 	}
 	os.Remove(dockerFile)
 
+	netWorkName := fmt.Sprintf("%s_network", imageName)
+
+	//err = rmNetwork(dp.Context, dp.Client, netWorkName)
+	//if err != nil {
+	//	log.Println(err.Error())
+	//	return err
+	//}
+
+	_, err = createNetwork(dp.Context, dp.Client, netWorkName)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	redisServerName := fmt.Sprintf("%s_redis", imageName)
+
+	err = rmContainer(dp.Context, dp.Client, redisServerName)
+	if err != nil {
+		log.Println(err)
+	}
+	runRedisServer(dp.Context, dp.Client, redisServerName)
+
+	err = attachToNetwork(dp.Context, dp.Client, netWorkName, redisServerName, []string{})
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	//log.Println("Redis server", id)
+
 	log.Println(deployConfig.Stack)
 	for agentName, agent := range deployConfig.Stack.Agents {
 		//log.Println(agent)
 		inputEnv := []string{
 			fmt.Sprintf("CEYLON_SOURCE=%s", agent.Source),
 			fmt.Sprintf("CEYLON_AGENT=%s", agent.Name),
-			"REDIS_HOST=192.168.8.100",
+			"REDIS_HOST=redis_host",
 			"REDIS_PORT=6379",
 			"REDIS_DB=0",
 		}
@@ -108,6 +137,14 @@ func (dp *DeployManager) Deploy() error {
 			return err
 		}
 		log.Println("Create container id ", id)
+
+		err = attachToNetwork(dp.Context, dp.Client, netWorkName, containerName, []string{
+			fmt.Sprintf("%s:redis_host", redisServerName),
+		})
+		if err != nil {
+			log.Println("Connect to network ", containerName, netWorkName)
+			return err
+		}
 	}
 	return nil
 }
@@ -132,6 +169,13 @@ func (dp *DeployManager) Destroy(isPrune bool) error {
 	}
 
 	imageName := deployConfig.Name
+	netWorkName := fmt.Sprintf("%s_network", imageName)
+	println(netWorkName)
+	err = rmNetwork(dp.Context, dp.Client, netWorkName)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
 
 	err = rmImage(dp.Context, dp.Client, imageName, isPrune)
 	if err != nil {

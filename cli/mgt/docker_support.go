@@ -21,6 +21,33 @@ import (
 	"text/template"
 )
 
+func attachToNetwork(ctx context.Context, client *client.Client, networkName string, containerId string, links []string) error {
+	err := client.NetworkConnect(ctx, networkName, containerId, &network.EndpointSettings{
+		Links: links,
+	})
+	return err
+}
+func rmNetwork(ctx context.Context, client *client.Client, networkName string) error {
+	err := client.NetworkRemove(ctx, networkName)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	return nil
+}
+
+func createNetwork(ctx context.Context, client *client.Client, networkName string) (string, error) {
+
+	res, err := client.NetworkCreate(ctx, networkName, types.NetworkCreate{
+		Internal:   false,
+		Attachable: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	return res.ID, nil
+}
+
 func rmImage(ctx context.Context, client *client.Client, imageName string, isPruneChildren bool) error {
 
 	deleted, err := client.ImageRemove(ctx, imageName, types.ImageRemoveOptions{
@@ -140,7 +167,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	// https://godoc.org/github.com/docker/docker/api/types#ImageBuildOptions
 	buildOptions := types.ImageBuildOptions{
 		Tags:       tags,
-		NoCache:    true,
+		NoCache:    false,
 		Remove:     true,
 		Dockerfile: dockerFile,
 		Context:    dockerFileTarReader,
@@ -179,6 +206,32 @@ func rmContainer(ctx context.Context, client *client.Client, containername strin
 		Force:         true,
 	})
 	return err
+}
+
+func runRedisServer(ctx context.Context, client *client.Client, containername string) {
+
+	reader, err := client.ImagePull(ctx, "docker.io/library/redis", types.ImagePullOptions{})
+	if err != nil {
+		panic(err)
+	}
+	io.Copy(os.Stdout, reader)
+
+	portBinding := natting.PortMap{}
+	cont, err := client.ContainerCreate(
+		context.Background(),
+		&container.Config{
+			Image: "redis",
+		},
+		&container.HostConfig{
+			PortBindings: portBinding,
+		}, nil, containername)
+	if err != nil {
+		panic(err)
+	}
+
+	client.ContainerStart(context.Background(), cont.ID, types.ContainerStartOptions{})
+	fmt.Printf("Container %s is started", cont.ID)
+
 }
 
 func runContainer(ctx context.Context, client *client.Client, imagename string, containername string, inputEnv []string, expose string) (string, error) {
@@ -221,18 +274,6 @@ func runContainer(ctx context.Context, client *client.Client, imagename string, 
 		},
 	}
 
-	// Define Network config (why isn't PORT in here...?:
-	// https://godoc.org/github.com/docker/docker/api/types/network#NetworkingConfig
-	networkConfig := &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{},
-	}
-	gatewayConfig := &network.EndpointSettings{
-		Gateway: "gatewayname",
-	}
-	networkConfig.EndpointsConfig["bridge"] = gatewayConfig
-
-	// Define ports to be exposed (has to be same as hostconfig.portbindings.newport)
-
 	// Configuration
 	// https://godoc.org/github.com/docker/docker/api/types/container#Config
 	config := &container.Config{
@@ -247,7 +288,7 @@ func runContainer(ctx context.Context, client *client.Client, imagename string, 
 		context.Background(),
 		config,
 		hostConfig,
-		networkConfig,
+		nil,
 		containername,
 	)
 
@@ -257,5 +298,6 @@ func runContainer(ctx context.Context, client *client.Client, imagename string, 
 	}
 	// Run the actual container
 	client.ContainerStart(ctx, cont.ID, types.ContainerStartOptions{})
+
 	return cont.ID, nil
 }

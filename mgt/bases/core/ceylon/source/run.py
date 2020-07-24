@@ -17,7 +17,7 @@ client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_
 
 
 async def process_message(source_instance, read_params):
-    await client.flushdb()
+    # await client.flushdb()
     pub_sub = client.pubsub()
     subscribes = []
     if hasattr(source_instance, "__dependents__"):
