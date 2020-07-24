@@ -45,7 +45,10 @@ to quickly create a Cobra application.`,
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	rm.Flags().Bool("prune", false, "Remove all child images")
-	viper.BindPFlag("port", rm.Flags().Lookup("prune"))
+	viper.BindPFlag("prune", rm.Flags().Lookup("prune"))
+
+	up.Flags().Bool("forceCreate", false, "Remove and create agents")
+	viper.BindPFlag("forceCreate", rm.Flags().Lookup("forceCreate"))
 
 	rootCmd.AddCommand(up, rm)
 	if err := rootCmd.Execute(); err != nil {

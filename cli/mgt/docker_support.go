@@ -45,6 +45,13 @@ func rmNetwork(ctx context.Context, client *client.Client, networkName string) e
 	}
 	return nil
 }
+func isNetworkExist(ctx context.Context, cl *client.Client, networkName string) (bool, error) {
+	_, err := cl.NetworkInspect(ctx, networkName)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
 
 func createNetwork(ctx context.Context, client *client.Client, networkName string) (string, error) {
 
@@ -116,9 +123,29 @@ func buildDockerImage(dockerFile string, expose []string) (string, error) {
 		println(err.Error())
 		return "", err
 	}
-	return tmpDockerFIle.Name(), nil
-}
 
+	tmpDockerFIle.Close()
+	if fileExists("Dockerfile") {
+		err = os.Remove("Dockerfile")
+		if err != nil {
+			println(err.Error())
+		}
+	}
+
+	err = os.Rename(tmpDockerFIle.Name(), "Dockerfile")
+	if err != nil {
+		println(err.Error())
+		return "", err
+	}
+	return "Dockerfile", nil
+}
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
 func buildImage(ctx context.Context, client *client.Client, tags []string, dockerFile string, sourceDir string, configFiles []string, configDirs []string) error {
 	_, baseFilePath, _, _ := runtime.Caller(1)
 
@@ -314,6 +341,26 @@ func startContainer(ctx context.Context, client *client.Client, containername st
 	// Run the actual container
 	err := client.ContainerStart(ctx, containername, types.ContainerStartOptions{})
 
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
+}
+
+func isContainerExist(ctx context.Context, cli *client.Client, containerName string) (bool, error) {
+	_, err := cli.ContainerInspect(ctx, containerName)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func updateContainerName(ctx context.Context, client *client.Client, containerName string, containerNewName string) error {
+	// Run the actual container
+	err := client.ContainerRename(ctx, containerName, containerNewName)
 	if err != nil {
 		log.Println(err)
 		return err

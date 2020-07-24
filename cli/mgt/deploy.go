@@ -39,7 +39,7 @@ func (dp *DeployManager) ReadConfig() (*config.DeployConfig, error) {
 	return deployConfig, nil
 }
 
-func (dp *DeployManager) Deploy() error {
+func (dp *DeployManager) Deploy(forceCreate bool) error {
 	err := dp.Init()
 	if err != nil {
 		panic(err)
@@ -72,37 +72,53 @@ func (dp *DeployManager) Deploy() error {
 	os.Remove(dockerFile)
 
 	redisServerName := fmt.Sprintf("%s_redis", imageName)
-	err = rmContainer(dp.Context, dp.Client, redisServerName)
-	if err != nil {
-		log.Println(err)
-	}
-	runRedisServer(dp.Context, dp.Client, redisServerName)
 
-	for agentName, _ := range deployConfig.Stack.Agents {
-
-		containerName := fmt.Sprintf("%s_agent", agentName)
-		println(agentName, containerName)
-		err = rmContainer(dp.Context, dp.Client, containerName)
+	if forceCreate {
+		err = rmContainer(dp.Context, dp.Client, redisServerName)
 		if err != nil {
 			log.Println(err)
+		}
+	}
+	isRedisServiceExits, _ := isContainerExist(dp.Context, dp.Client, redisServerName)
+	if !isRedisServiceExits {
+		runRedisServer(dp.Context, dp.Client, redisServerName)
+	}
+
+	if forceCreate {
+		for agentName, _ := range deployConfig.Stack.Agents {
+
+			containerName := fmt.Sprintf("%s_agent", agentName)
+			println(agentName, containerName)
+
+			err = rmContainer(dp.Context, dp.Client, containerName)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 
 	}
 
 	netWorkName := fmt.Sprintf("%s_network", imageName)
-
-	err = rmNetwork(dp.Context, dp.Client, netWorkName)
-	if err != nil {
-		log.Println(err.Error())
+	if forceCreate {
+		err = rmNetwork(dp.Context, dp.Client, netWorkName)
+		if err != nil {
+			log.Println(err.Error())
+		}
 	}
 
-	_, err = createNetwork(dp.Context, dp.Client, netWorkName)
-	if err != nil {
-		log.Fatal(err)
-		return err
+	isNetworkExists, _ := isNetworkExist(dp.Context, dp.Client, netWorkName)
+	if !isNetworkExists {
+		_, err = createNetwork(dp.Context, dp.Client, netWorkName)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
 	}
 
-	err = attachToNetwork(dp.Context, dp.Client, netWorkName, redisServerName, []string{})
+	if !isNetworkExists || !isRedisServiceExits {
+		err = attachToNetwork(dp.Context, dp.Client, netWorkName, redisServerName, []string{})
+	}
+
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -133,22 +149,45 @@ func (dp *DeployManager) Deploy() error {
 		}
 
 		containerName := fmt.Sprintf("%s_agent", agentName)
+		containerTempName := fmt.Sprintf("%s_agent_temp", agentName)
 		println(agentName, containerName)
 
-		id, err := runContainer(dp.Context, dp.Client, imageName, containerName, inputEnv, agent.Expose)
+		isContainerExists, _ := isContainerExist(dp.Context, dp.Client, containerTempName)
+		if isContainerExists {
+			err = rmContainer(dp.Context, dp.Client, containerTempName)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
+		}
+
+		id, err := runContainer(dp.Context, dp.Client, imageName, containerTempName, inputEnv, agent.Expose)
 		if err != nil {
 			log.Fatal(err)
 			return err
 		}
 		log.Println("Create container id ", id)
-		err = attachToNetwork(dp.Context, dp.Client, netWorkName, containerName, []string{
+
+		err = attachToNetwork(dp.Context, dp.Client, netWorkName, containerTempName, []string{
 			fmt.Sprintf("%s:redis_host", redisServerName),
 		})
 		if err != nil {
 			log.Fatal(err)
 			return err
 		}
-		err = startContainer(dp.Context, dp.Client, id)
+
+		isContainerExists, _ = isContainerExist(dp.Context, dp.Client, containerName)
+		if isContainerExists {
+			err = rmContainer(dp.Context, dp.Client, containerName)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
+		}
+
+		err = updateContainerName(dp.Context, dp.Client, containerTempName, containerName)
+
+		err = startContainer(dp.Context, dp.Client, containerName)
 		if err != nil {
 			log.Fatal(err)
 			return err
