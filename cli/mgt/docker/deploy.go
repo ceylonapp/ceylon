@@ -1,4 +1,4 @@
-package mgt
+package docker
 
 import (
 	"ceylon/cli/config"

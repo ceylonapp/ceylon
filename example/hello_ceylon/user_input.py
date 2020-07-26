@@ -19,6 +19,6 @@ class UserInputAgent:
         while True:
             await self.send_message(data={
                 "ab": "RUN AGENT",
-                "amount": self.processed_amount + request["ad"]+20
+                "amount": self.processed_amount + request["ad"]+50
             })
             await asyncio.sleep(2)

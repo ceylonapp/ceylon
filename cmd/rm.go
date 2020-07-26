@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"ceylon/cli/mgt"
+	"ceylon/cli/mgt/docker"
 	"context"
 	"github.com/spf13/cobra"
 )
@@ -12,7 +12,7 @@ var rm = &cobra.Command{
 
 		isPrune, err := cmd.Flags().GetBool("prune")
 
-		deployManager := mgt.DeployManager{
+		deployManager := docker.DeployManager{
 			Context: context.Background(),
 		}
 

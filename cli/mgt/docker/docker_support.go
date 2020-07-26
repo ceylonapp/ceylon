@@ -1,4 +1,4 @@
-package mgt
+package docker
 
 import (
 	"archive/tar"
@@ -86,7 +86,7 @@ func rmImage(ctx context.Context, client *client.Client, imageName string, isPru
 
 func buildDockerImage(dockerFile string, expose []string) (string, error) {
 	_, baseFilePath, _, _ := runtime.Caller(1)
-	dockerFilePath := path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", dockerFile))
+	dockerFilePath := path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", dockerFile))
 	content, err := ioutil.ReadFile(dockerFilePath)
 	if err != nil {
 		println(err.Error())
@@ -163,7 +163,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 	//}
 
 	for _, configFile := range configFiles {
-		configFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", configFile))
+		configFile = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", configFile))
 		_, err := utils.FileToTar(configFile, "config/", tw)
 		if err != nil {
 			return err
@@ -172,7 +172,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 
 	// Add File Dirs
 	for _, configDir := range configDirs {
-		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../%s", configDir))
+		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", configDir))
 		err := utils.DirToTar(configDir, tw)
 		if err != nil {
 			return err

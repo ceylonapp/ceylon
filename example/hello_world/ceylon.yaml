@@ -7,3 +7,6 @@ stack:
     hi:
       source: hi.py
       name: HiProcess
+      env_vars:
+        "client_id=1222"
+        ""
