@@ -4,8 +4,12 @@ import (
 	"ceylon/cli/config"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
 )
 
 type CreateSettings struct {
@@ -18,9 +22,10 @@ type Deploy interface {
 	readConfig() error
 }
 type VEnvDeployManager struct {
-	Context context.Context
-	env     *VirtualEnvService
-	Config  *config.DeployConfig
+	Context     context.Context
+	env         *VirtualEnvService
+	Config      *config.DeployConfig
+	ProjectPath string
 }
 
 func (dp *VEnvDeployManager) readConfig() (*config.DeployConfig, error) {
@@ -61,11 +66,68 @@ func (dp *VEnvDeployManager) Init() {
 }
 
 func (dp *VEnvDeployManager) Create(config *CreateSettings) (err error) {
-	err = dp.env.initiateLocation()
+	projectLocation, err := dp.env.initiateLocation()
 	if err != nil {
 		log.Fatal(err)
 		return err
 	}
+	dp.ProjectPath = projectLocation
+
+	return nil
+}
+
+func (dp *VEnvDeployManager) Prepare() error {
+	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "create.bat"), dp.ProjectPath)
+	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe"), "--version")
+	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/pip.exe"), "install", "-r", filepath.Join(dp.ProjectPath, "mgt\\images\\core\\requirements.txt"))
+	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/pip.exe"), "install", "-r", filepath.Join(dp.ProjectPath, "requirements.txt"))
+
+	return nil
+}
+
+func runCommand(out io.Writer, command string, args ...string) {
+	log.Println("Executing...", command, args)
+	cmd := exec.Command(command, args...)
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	cmd.Start()
+	io.Copy(out, stdout)
+	io.Copy(out, stderr)
+	cmd.Wait()
+}
+
+func (dp *VEnvDeployManager) agentWorker(wg *sync.WaitGroup, agent config.Agent, out io.Writer) {
+	defer wg.Done()
+
+	agentArgs := []string{filepath.Join(dp.ProjectPath, "ceylon/source/run.py")}
+	agentArgs = append(agentArgs, "--source", agent.Source)
+	agentArgs = append(agentArgs, "--agent", agent.Name)
+
+	//--path=/hello --expose=8080 --type=ws
+	if agent.Expose != "" {
+		agentArgs = append(agentArgs, "--expose", agent.Expose)
+	}
+	if agent.Type != "" {
+		agentArgs = append(agentArgs, "--type", agent.Type)
+	}
+	if agent.Path != "" {
+		agentArgs = append(agentArgs, "--path", agent.Path)
+	}
+
+	prepareFilePath := filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe")
+	runCommand(out, prepareFilePath, agentArgs...)
+}
+
+func (dp *VEnvDeployManager) Run() error {
+	var wg sync.WaitGroup
+	//var out io.Reader
+	for _, agent := range dp.Config.Stack.Agents {
+		wg.Add(1)
+		go dp.agentWorker(&wg, agent, os.Stdout)
+	}
+	fmt.Println("Main: Waiting for workers to finish")
+	wg.Wait()
+	fmt.Println("Main: Completed")
 
 	return nil
 }

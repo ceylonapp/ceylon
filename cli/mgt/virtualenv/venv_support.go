@@ -19,7 +19,7 @@ type VirtualEnvService struct {
 	DeployConfig *config.DeployConfig
 }
 
-func (s *VirtualEnvService) initiateLocation() error {
+func (s *VirtualEnvService) initiateLocation() (string, error) {
 	projectsRuntimePath := "J:\\BotFramework\\ceylon\\tmp"
 	projectDir := path.Join(projectsRuntimePath, fmt.Sprintf("%s", s.DeployConfig.Name))
 
@@ -62,7 +62,14 @@ func (s *VirtualEnvService) initiateLocation() error {
 	gw.Close()
 	projectArchive.Close()
 
-	utils.ExtractTarGz(projectArchivePath, projectDir)
+	err = utils.ExtractTarArchive(projectArchivePath, projectDir, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//err = utils.ExtractTarArchive(filepath.Join(projectDir, "mgt/libs/windows/venv.tar.gz"), projectDir, false)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
-	return nil
+	return projectDir, nil
 }

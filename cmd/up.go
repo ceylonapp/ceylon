@@ -17,6 +17,8 @@ var up = &cobra.Command{
 		deployManager := virtualenv.CreateInstance(context.Background())
 
 		err = deployManager.Create(&virtualenv.CreateSettings{ForceCreate: forceCreate})
+		err = deployManager.Prepare()
+		err = deployManager.Run()
 		//
 
 		if err != nil {

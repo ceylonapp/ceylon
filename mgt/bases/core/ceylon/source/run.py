@@ -9,9 +9,9 @@ from importlib.machinery import SourceFileLoader
 import aredis
 import click
 
-redis_host = os.environ.get('REDIS_HOST')
-redis_port = os.environ.get('REDIS_PORT')
-redis_db = os.environ.get('REDIS_DB')
+redis_host = os.environ.get('REDIS_HOST', '127.0.0.1')
+redis_port = os.environ.get('REDIS_PORT', '6379')
+redis_db = os.environ.get('REDIS_DB', '0')
 
 client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
 

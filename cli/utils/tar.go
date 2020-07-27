@@ -355,3 +355,42 @@ func ExtractTarGz(source string, target string) error {
 	}
 	return err
 }
+
+func ExtractTarArchive(source string, target string, compressed bool) error {
+	file, err := os.Open(source)
+	var tr *tar.Reader
+	if compressed {
+		archive, err := gzip.NewReader(file)
+
+		if err != nil {
+			fmt.Println("There is a problem with os.Open")
+		}
+		tr = tar.NewReader(archive)
+	} else {
+		tr = tar.NewReader(file)
+	}
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fileTarget := filepath.Join(target, hdr.Name)
+		fmt.Printf("Contents of %s %s \n", hdr.Name, fileTarget)
+
+		//Using a bytes buffer is an important part to print the values as a string
+
+		bud := new(bytes.Buffer)
+		bud.ReadFrom(tr)
+
+		os.MkdirAll(filepath.Dir(fileTarget), 0777)
+		targetFile, _ := os.Create(fileTarget)
+		io.Copy(targetFile, bud)
+		targetFile.Close()
+	}
+	return err
+}
