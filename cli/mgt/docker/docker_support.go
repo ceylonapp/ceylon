@@ -170,7 +170,7 @@ func buildImage(ctx context.Context, client *client.Client, tags []string, docke
 		}
 	}
 
-	// Add File Dirs
+	// Add TarFile Dirs
 	for _, configDir := range configDirs {
 		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", configDir))
 		err := utils.DirToTar(configDir, tw)

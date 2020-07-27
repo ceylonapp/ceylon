@@ -1,0 +1,6 @@
+name: binay_trading_agent
+stack:
+  agents:
+    read_binary:
+      source: read_data.py
+      name: BinaryDataReadingAgent

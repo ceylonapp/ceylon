@@ -3,17 +3,26 @@ package utils
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
 type File struct {
 	name string
+}
+
+type ArchiveFile struct {
+	FilePath        string
+	ArchiveFilePath string
 }
 
 type IgnoreList struct {
@@ -189,5 +198,158 @@ func DirToTar(sourceDir string,
 		return nil
 	})
 
+	return err
+}
+
+func CreateAcceptFileList(sourceDir string) (fileList []ArchiveFile, err error) {
+	fileList = make([]ArchiveFile, 0)
+	ignoreFilePath := fmt.Sprintf("%s/.ceylonignore", sourceDir)
+	ignoreFile, err := os.Open(ignoreFilePath)
+	CheckError(err)
+	var ignore IgnoreList
+	if ignoreFile != nil {
+		ignore = CreateIgnore(ignoreFile)
+	}
+
+	dir, err := os.Open(sourceDir)
+	CheckError(err)
+	defer dir.Close()
+
+	// get list of files
+	files, err := dir.Readdir(0)
+	CheckError(err)
+
+	log.Println("Number of files ", len(files))
+	// walk path
+	filepath.Walk(sourceDir, func(filePath string, fi os.FileInfo, err error) error {
+		file := strings.Replace(strings.Replace(filePath, sourceDir, "", -1), string("\\"), "/", -1)
+		fileName := strings.Replace(file, sourceDir, "", 1)
+
+		if strings.HasPrefix(fileName, "/") {
+			fileName = strings.Replace(fileName, "/", "", 1)
+		}
+
+		if &ignore != nil {
+			isIgnore := ignore.match(fileName)
+			if isIgnore {
+				return nil
+			}
+
+		}
+
+		// return on any error
+		if err != nil {
+			return err
+		}
+
+		// return on non-regular files (thanks to [kumo](https://medium.com/@komuw/just-like-you-did-fbdd7df829d3) for this suggested update)
+		if !fi.Mode().IsRegular() {
+			return nil
+		}
+
+		fileList = append(fileList, ArchiveFile{
+			FilePath:        filePath,
+			ArchiveFilePath: fileName,
+		})
+
+		return nil
+	})
+	return
+}
+
+func CreateProjectTar(configFiles []string, configDirs []string, sourceDir string, tw *tar.Writer) error {
+
+	_, baseFilePath, _, _ := runtime.Caller(1)
+
+	projectFiles := make([]ArchiveFile, 0)
+
+	for _, configFile := range configFiles {
+		configFilePath := path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", configFile))
+		projectFiles = append(projectFiles, ArchiveFile{
+			FilePath:        configFilePath,
+			ArchiveFilePath: configFile,
+		})
+	}
+
+	// Add TarFile Dirs
+	for _, configDir := range configDirs {
+		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", configDir))
+		fileList, err := CreateAcceptFileList(configDir)
+		if err != nil {
+			return err
+		}
+		projectFiles = append(projectFiles, fileList...)
+	}
+
+	fileList, err := CreateAcceptFileList(sourceDir)
+	if err != nil {
+		return err
+	}
+	projectFiles = append(projectFiles, fileList...)
+
+	for _, prFile := range projectFiles {
+		err = addFile(tw, prFile.FilePath, prFile.ArchiveFilePath)
+		if err != nil {
+			log.Println("Error ", err.Error())
+		}
+	}
+
+	return nil
+}
+func addFile(tw *tar.Writer, path string, archivePath string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if stat, err := file.Stat(); err == nil {
+		// now lets create the header as needed for this file within the tarball
+		header := new(tar.Header)
+		header.Name = archivePath
+		header.Size = stat.Size()
+		header.Mode = int64(stat.Mode())
+		header.ModTime = stat.ModTime()
+		// write the header to the tarball archive
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		// copy the file data to the tarball
+		if _, err := io.Copy(tw, file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ExtractTarGz(source string, target string) error {
+	file, err := os.Open(source)
+
+	archive, err := gzip.NewReader(file)
+
+	if err != nil {
+		fmt.Println("There is a problem with os.Open")
+	}
+	tr := tar.NewReader(archive)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fileTarget := filepath.Join(target, hdr.Name)
+		fmt.Printf("Contents of %s:\n", hdr.Name)
+
+		//Using a bytes buffer is an important part to print the values as a string
+
+		bud := new(bytes.Buffer)
+		bud.ReadFrom(tr)
+		targetFile, _ := os.Create(fileTarget)
+		io.Copy(targetFile, bud)
+		targetFile.Close()
+	}
 	return err
 }

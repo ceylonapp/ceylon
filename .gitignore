@@ -4,3 +4,4 @@ __pycache__/
 just_check_ignore.text
 build/
 go.sum
+tmp/

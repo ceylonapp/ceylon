@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"ceylon/cli/mgt/docker"
+	"ceylon/cli/mgt/virtualenv"
 	"context"
 	"github.com/spf13/cobra"
 )
@@ -11,12 +11,14 @@ var up = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		forceCreate, err := cmd.Flags().GetBool("forceCreate")
-
-		deployManager := docker.DeployManager{
-			Context: context.Background(),
+		if err != nil {
+			panic(err)
 		}
+		deployManager := virtualenv.CreateInstance(context.Background())
 
-		err = deployManager.Deploy(forceCreate)
+		err = deployManager.Create(&virtualenv.CreateSettings{ForceCreate: forceCreate})
+		//
+
 		if err != nil {
 			panic(err)
 		}
