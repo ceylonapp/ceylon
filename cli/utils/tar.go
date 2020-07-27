@@ -341,12 +341,14 @@ func ExtractTarGz(source string, target string) error {
 		}
 
 		fileTarget := filepath.Join(target, hdr.Name)
-		fmt.Printf("Contents of %s:\n", hdr.Name)
+		fmt.Printf("Contents of %s %s \n", hdr.Name, fileTarget)
 
 		//Using a bytes buffer is an important part to print the values as a string
 
 		bud := new(bytes.Buffer)
 		bud.ReadFrom(tr)
+
+		os.MkdirAll(filepath.Dir(fileTarget), 0777)
 		targetFile, _ := os.Create(fileTarget)
 		io.Copy(targetFile, bud)
 		targetFile.Close()
