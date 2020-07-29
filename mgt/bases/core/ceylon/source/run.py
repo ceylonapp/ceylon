@@ -15,6 +15,26 @@ redis_db = os.environ.get('REDIS_DB', '0')
 
 client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
 
+loop = asyncio.get_event_loop()
+
+
+# @async_to_sync
+async def log_message(ch, msg):
+    await client.publish(f"sys_log:{ch}:", msg)
+
+
+class Logger(object):
+    def __init__(self, name="Agent"):
+        self.name = name
+        self.terminal = sys.stdout
+
+    def write(self, message):
+        self.terminal.write(message)
+        loop.create_task(log_message(self.name, message))
+
+    def flush(self):
+        pass
+
 
 async def process_message(source_instance, read_params):
     # await client.flushdb()
@@ -120,10 +140,10 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
 @click.command()
 @click.option("--source", default=None, help="Please define input streams")
 @click.option("--agent", default=None, help="Please define agent class")
-@click.option("--path", default=None, help="Please define agent class")
-@click.option("--expose", default=None, help="Please define agent class")
-@click.option("--type", default="http", help="Please define agent class")
-@click.option("--override/--no-override", default=False, help="Please define agent class")
+@click.option("--path", default=None, help="Web expose path")
+@click.option("--expose", default=None, help="Web expose port")
+@click.option("--type", default="http", help="Type can be ws(WebSocket) or http")
+@click.option("--override/--no-override", default=False, help="Override params by system variable ")
 @click.option("--read-params", default={"name": "Agent Framework Reading"})
 @click.option("--init-params", default={"name": "Agent Framework Init"})
 def run(source, agent, path, expose, type, override, read_params, init_params):
@@ -137,12 +157,14 @@ def run(source, agent, path, expose, type, override, read_params, init_params):
         if os.environ.get("CEYLON_TYPE") != "":
             type = os.environ.get('CEYLON_TYPE')
 
+    sys.stdout = Logger(name=agent)
+
     source = f"{source}"
     agent = f"{agent}"
     print("source ", source, "agent", agent, "read_params", read_params, "init_params", init_params, "path", path,
           "expose", expose, "type", type)
 
-    asyncio.run(run_agent(source, agent, read_params, init_params, path, expose, type))
+    loop.run_until_complete(run_agent(source, agent, read_params, init_params, path, expose, type))
 
 
 if __name__ == '__main__':

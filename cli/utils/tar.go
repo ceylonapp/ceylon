@@ -276,6 +276,7 @@ func CreateProjectTar(configFiles []string, configDirs []string, sourceDir strin
 		configDir = path.Join(path.Dir(baseFilePath), fmt.Sprintf("../../../%s", configDir))
 		fileList, err := CreateAcceptFileList(configDir)
 		if err != nil {
+			panic(err)
 			return err
 		}
 		projectFiles = append(projectFiles, fileList...)
@@ -290,7 +291,8 @@ func CreateProjectTar(configFiles []string, configDirs []string, sourceDir strin
 	for _, prFile := range projectFiles {
 		err = addFile(tw, prFile.FilePath, prFile.ArchiveFilePath)
 		if err != nil {
-			log.Println("Error ", err.Error())
+			panic(err)
+			return err
 		}
 	}
 
@@ -311,10 +313,12 @@ func addFile(tw *tar.Writer, path string, archivePath string) error {
 		header.ModTime = stat.ModTime()
 		// write the header to the tarball archive
 		if err := tw.WriteHeader(header); err != nil {
+			panic(err)
 			return err
 		}
 		// copy the file data to the tarball
 		if _, err := io.Copy(tw, file); err != nil {
+			panic(err)
 			return err
 		}
 	}
@@ -337,7 +341,7 @@ func ExtractTarGz(source string, target string) error {
 			break
 		}
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 
 		fileTarget := filepath.Join(target, hdr.Name)
@@ -363,7 +367,7 @@ func ExtractTarArchive(source string, target string, compressed bool) error {
 		archive, err := gzip.NewReader(file)
 
 		if err != nil {
-			fmt.Println("There is a problem with os.Open")
+			panic(err)
 		}
 		tr = tar.NewReader(archive)
 	} else {
@@ -376,7 +380,7 @@ func ExtractTarArchive(source string, target string, compressed bool) error {
 			break
 		}
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 
 		fileTarget := filepath.Join(target, hdr.Name)

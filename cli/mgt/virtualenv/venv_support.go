@@ -27,14 +27,15 @@ func (s *VirtualEnvService) initiateLocation() (string, error) {
 	_, err := os.Stat(projectDir)
 
 	if os.IsNotExist(err) {
-		errDir := os.MkdirAll(projectDir, 0777)
-		if errDir != nil {
-			log.Fatal(err)
+		err := os.MkdirAll(projectDir, 0777)
+		if err != nil {
+			panic(err)
 		}
 	} else {
-		errDir := fileutil.RemoveContents(projectDir)
-		if errDir != nil {
-			log.Fatal(err)
+		err := fileutil.RemoveContents(projectDir)
+		if err != nil {
+			log.Println(err.Error())
+			print(err)
 		}
 	}
 
@@ -42,7 +43,7 @@ func (s *VirtualEnvService) initiateLocation() (string, error) {
 	projectArchivePath := path.Join(projectDir, "project.tar.gz")
 	projectArchive, err := os.Create(projectArchivePath)
 	if err != nil {
-		log.Fatalln(err)
+		panic(err)
 	}
 	defer projectArchive.Close()
 	// set up the gzip writer
@@ -56,7 +57,7 @@ func (s *VirtualEnvService) initiateLocation() (string, error) {
 
 	err = utils.CreateProjectTar(configFiles, fileDirs, *s.BaseLocation, tw)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	tw.Close()
 	gw.Close()
@@ -64,7 +65,7 @@ func (s *VirtualEnvService) initiateLocation() (string, error) {
 
 	err = utils.ExtractTarArchive(projectArchivePath, projectDir, true)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	//err = utils.ExtractTarArchive(filepath.Join(projectDir, "mgt/libs/windows/venv.tar.gz"), projectDir, false)
 	//if err != nil {

@@ -4,10 +4,10 @@ import (
 	"ceylon/cli/config"
 	"context"
 	"fmt"
+	"github.com/go-cmd/cmd"
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 )
@@ -31,7 +31,7 @@ type VEnvDeployManager struct {
 func (dp *VEnvDeployManager) readConfig() (*config.DeployConfig, error) {
 	path, err := os.Getwd()
 	if err != nil {
-		log.Println(err)
+		panic(err)
 	}
 
 	configPath := fmt.Sprintf("%s/%s", path, "ceylon.yaml")
@@ -68,7 +68,7 @@ func (dp *VEnvDeployManager) Init() {
 func (dp *VEnvDeployManager) Create(config *CreateSettings) (err error) {
 	projectLocation, err := dp.env.initiateLocation()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 		return err
 	}
 	dp.ProjectPath = projectLocation
@@ -86,14 +86,43 @@ func (dp *VEnvDeployManager) Prepare() error {
 }
 
 func runCommand(out io.Writer, command string, args ...string) {
-	log.Println("Executing...", command, args)
-	cmd := exec.Command(command, args...)
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-	cmd.Start()
-	io.Copy(out, stdout)
-	io.Copy(out, stderr)
-	cmd.Wait()
+
+	exeCmd := cmd.NewCmd(command, args...)
+	statusChan := exeCmd.Start()
+	go func() {
+		status := exeCmd.Status()
+		for _, logVal := range status.Stdout {
+			log.Println("LOG :: ", logVal)
+		}
+		//io.Copy(out, status.Stdout)
+	}()
+	// Check if command is done
+	select {
+	case finalStatus := <-statusChan:
+		log.Println(finalStatus)
+	default:
+		log.Println(statusChan)
+	}
+
+	// Block waiting for command to exit, be stopped, or be killed
+	finalStatus := <-statusChan
+	log.Println(finalStatus)
+	//for {
+	//	statusS := <-status
+	//	log.Println(statusS.Stdout)
+	//}
+	//// Print each line of STDOUT from Cmd
+	//for _, line := range status.Stdout {
+	//	fmt.Println(line)
+	//}
+	////log.Println("Executing...", command, args)
+	////cmd := exec.Command(command, args...)
+	////stdout, _ := cmd.StdoutPipe()
+	////stderr, _ := cmd.StderrPipe()
+	////cmd.Start()
+	////io.Copy(out, stdout)
+	////io.Copy(out, stderr)
+	////cmd.Wait()
 }
 
 func (dp *VEnvDeployManager) agentWorker(wg *sync.WaitGroup, agent config.Agent, out io.Writer) {
