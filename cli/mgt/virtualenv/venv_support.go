@@ -20,7 +20,7 @@ type VirtualEnvService struct {
 }
 
 func (s *VirtualEnvService) initiateLocation() (string, error) {
-	projectsRuntimePath := "J:\\BotFramework\\ceylon\\tmp"
+	projectsRuntimePath := path.Join(*s.BaseLocation, fmt.Sprintf("build"))
 	projectDir := path.Join(projectsRuntimePath, fmt.Sprintf("%s", s.DeployConfig.Name))
 
 	// Create project path
