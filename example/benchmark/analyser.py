@@ -30,16 +30,29 @@ class AnalyserAgent:
 
     def __init__(self, config=None):
         print("Task Creator", config)
+        self.data_count = 0
+        self.avg_speed = -1
+        self.avg_data_size = -1
 
     async def accept_message(self, agent, message):
+        self.data_count += 1
         sender_time = int(message["data"]["gen_time"])
         current_time = time.time_ns()
-        msg_size = get_size(message["data"]) / 1024
+
         if sender_time != current_time:
             speed = (1 / ((current_time - sender_time) / 1e9))
-            print(f"Message {msg_size:0.2f} kb Speed ", f"{speed:0.2f} Hz")
-        else:
-            print("Instant")
+            self.avg_speed = (self.avg_speed + speed) / (2 if self.avg_speed > 0 else 1)
+
+            msg_size = get_size(message["data"]) / 1024
+            self.avg_data_size = (self.avg_data_size + msg_size) / (2 if self.avg_data_size > 0 else 1)
+
+        if self.data_count >= 10000:
+            print(f"{self.data_count} {self.avg_data_size:0.2f} kb ", f"{self.avg_speed:0.2f} Hz")
+            self.avg_speed = -1
+            self.avg_data_size = -1
+            self.data_count = 0
+        # else:
+        #     print("Instant")
 
     async def run_agent(self, request):
         print("started")

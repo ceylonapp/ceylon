@@ -3,10 +3,12 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from importlib.machinery import SourceFileLoader
 
 import aredis
 import click
+import redis
 import sys
 
 redis_host = os.environ.get('REDIS_HOST', '127.0.0.1')
@@ -14,21 +16,21 @@ redis_port = os.environ.get('REDIS_PORT', '6379')
 redis_db = os.environ.get('REDIS_DB', '0')
 
 client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
-loop = asyncio.get_event_loop()
 
 
-async def log_message(ch, msg):
-    await client.publish(f"sys_log:{ch}:", msg)
-
-
-class Logger(object):
+class SysLogger(object):
     def __init__(self, name="Agent"):
         self.name = name
         self.terminal = sys.stdout
+        self.r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
 
     def write(self, message):
         self.terminal.write(message)
-        loop.create_task(log_message(self.name, message))
+        self.r.publish("sys_log", json.dumps({
+            "time": f"{datetime.now()}",
+            "agent": self.name,
+            "message": message
+        }))
 
     def flush(self):
         pass
@@ -44,7 +46,9 @@ for id, arg in enumerate(sys.argv):
     elif arg == "--agent":
         agent_name = sys.argv[id + 1]
 print(source_name, agent_name)
-sys.stdout = Logger(name=agent_name)
+
+sys.stdout = SysLogger(name=agent_name)
+print("init agent logger ", source_name, agent_name)
 
 
 async def process_message(source_instance, read_params):
@@ -171,6 +175,7 @@ def run(source, agent, path, expose, type, override, read_params, init_params):
     print("source ", source, "agent", agent, "read_params", read_params, "init_params", init_params, "path", path,
           "expose", expose, "type", type)
 
+    loop = asyncio.get_event_loop()
     loop.run_until_complete(run_agent(source, agent, read_params, init_params, path, expose, type))
 
 
