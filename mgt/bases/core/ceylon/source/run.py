@@ -3,22 +3,20 @@ import asyncio
 import json
 import logging
 import os
-import sys
 from importlib.machinery import SourceFileLoader
 
 import aredis
 import click
+import sys
 
 redis_host = os.environ.get('REDIS_HOST', '127.0.0.1')
 redis_port = os.environ.get('REDIS_PORT', '6379')
 redis_db = os.environ.get('REDIS_DB', '0')
 
 client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
-
 loop = asyncio.get_event_loop()
 
 
-# @async_to_sync
 async def log_message(ch, msg):
     await client.publish(f"sys_log:{ch}:", msg)
 
@@ -36,8 +34,20 @@ class Logger(object):
         pass
 
 
+agent_name = ""
+source_name = ""
+
+for id, arg in enumerate(sys.argv):
+    if arg == "--source":
+        source_name = sys.argv[id + 1]
+
+    elif arg == "--agent":
+        agent_name = sys.argv[id + 1]
+print(source_name, agent_name)
+sys.stdout = Logger(name=agent_name)
+
+
 async def process_message(source_instance, read_params):
-    # await client.flushdb()
     pub_sub = client.pubsub()
     subscribes = []
     if hasattr(source_instance, "__dependents__"):
@@ -65,7 +75,6 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
 
     def ws_response_stream(ws):
         async def _response_stream(*args, **kwargs):
-            print(ws.status)
             await ws.send_json(kwargs)
             await client.publish(agent, kwargs)
 
@@ -77,7 +86,7 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
     source_instance = source_class(config=init_params)
     source_class.send_message = response_stream
 
-    asyncio.create_task(process_message(source_instance, read_params))
+    task = asyncio.create_task(process_message(source_instance, read_params))
 
     if not path and not expose:
         await source_instance.run_agent(request=read_params)
@@ -116,7 +125,6 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
                 elif msg.type == WSMsgType.ERROR:
                     print('ws connection closed with exception %s' %
                           ws.exception())
-
             print('websocket connection closed')
             return ws
 
@@ -126,15 +134,16 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
             app.add_routes([web.post(f'{path}', handle)])
         elif type == "ws":
             app.add_routes([web.get(f'{path}', websocket_handler)])
-        # web.run_app(app, host="0.0.0.0", port=int(expose))
 
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, host="0.0.0.0", port=int(expose))
         print(f"Agent listing into 0.0.0.0:{expose}{path}")
         await site.start()
-        # wait forever
         await asyncio.Event().wait()
+
+    await task
+    print(f" {agent}  finished")
 
 
 @click.command()
@@ -156,8 +165,6 @@ def run(source, agent, path, expose, type, override, read_params, init_params):
             expose = os.environ.get('CEYLON_EXPOSE')
         if os.environ.get("CEYLON_TYPE") != "":
             type = os.environ.get('CEYLON_TYPE')
-
-    sys.stdout = Logger(name=agent)
 
     source = f"{source}"
     agent = f"{agent}"

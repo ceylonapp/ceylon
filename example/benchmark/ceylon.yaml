@@ -1,0 +1,11 @@
+name: ceylon_benchmark
+stack:
+  agents:
+    task_creator:
+      source: task_creator.py
+      name: TaskCreatorAgent
+      version: 1.0.0
+    analyser:
+      source: analyser.py
+      name: AnalyserAgent
+      version: 1.0.0
