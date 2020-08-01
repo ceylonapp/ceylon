@@ -1,8 +1,8 @@
 import sys
 import time
 
-payload = ''.join([f"01010101010" for r in range(int(1e5))])
-print(sys.getsizeof(payload)/1e3)
+payload = ''.join([f"1" for r in range(int(1*1024))])
+print(sys.getsizeof(payload)/1024)
 
 
 class TaskCreatorAgent:
