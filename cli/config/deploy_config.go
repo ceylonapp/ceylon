@@ -22,8 +22,9 @@ type Stack struct {
 	Agents map[string]Agent `yaml:"agents,flow"`
 }
 type DeployConfig struct {
-	Name  string `yaml:"name"`
-	Stack Stack  `yaml:"stack"`
+	Name   string   `yaml:"name"`
+	Stack  Stack    `yaml:"stack"`
+	Envars []string `yaml:"envars"`
 }
 
 // NewConfig returns a new decoded Config struct
@@ -59,17 +60,17 @@ func NewConfig(configPath string) (*DeployConfig, error) {
 				},
 			},
 		},
+		Envars: []string{
+			"envars1=testval1",
+			"envars2=testval2",
+		},
 	})
 
+	log.Println("Example file")
 	log.Println(string(b))
 
-	//// Init new YAML decode
-	//d := yaml.NewDecoder(file)
-	//
-	//// Start YAML decoding from file
-	//if err := d.Decode(&config); err != nil {
-	//	return nil, err
-	//}
+	log.Println("Read config")
+	log.Println(config)
 
 	return config, nil
 }

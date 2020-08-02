@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 )
 
 type VirtualEnvService struct {
@@ -21,7 +22,7 @@ type VirtualEnvService struct {
 
 func (s *VirtualEnvService) initiateLocation(forceDelete bool) (string, error) {
 	projectsRuntimePath := path.Join(*s.BaseLocation, fmt.Sprintf("build"))
-	projectDir := path.Join(projectsRuntimePath, fmt.Sprintf("%s", s.DeployConfig.Name))
+	projectDir := projectsRuntimePath //path.Join(projectsRuntimePath, fmt.Sprintf("%s", s.DeployConfig.Name))
 
 	// Create project path
 	_, err := os.Stat(projectDir)
@@ -56,6 +57,14 @@ func (s *VirtualEnvService) initiateLocation(forceDelete bool) (string, error) {
 	fileDirs := []string{"mgt/bases/core"}
 
 	err = utils.CreateProjectTar(configFiles, fileDirs, *s.BaseLocation, tw)
+
+	envVars := make([]string, 0)
+	for _, envar := range s.DeployConfig.Envars {
+		envVars = append(envVars, strings.ToUpper(fmt.Sprintf("%s_%s", s.DeployConfig.Name, envar)))
+	}
+
+	err = utils.AppendEnvarFile(envVars, tw, *s.BaseLocation)
+
 	if err != nil {
 		panic(err)
 	}
@@ -67,10 +76,6 @@ func (s *VirtualEnvService) initiateLocation(forceDelete bool) (string, error) {
 	if err != nil {
 		panic(err)
 	}
-	//err = utils.ExtractTarArchive(filepath.Join(projectDir, "mgt/libs/windows/venv.tar.gz"), projectDir, false)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
 
 	return projectDir, nil
 }

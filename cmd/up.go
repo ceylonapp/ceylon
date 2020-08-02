@@ -4,6 +4,7 @@ import (
 	"ceylon/cli/mgt/virtualenv"
 	"context"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 var up = &cobra.Command{
@@ -18,6 +19,10 @@ var up = &cobra.Command{
 
 		err = deployManager.Create(&virtualenv.CreateSettings{ForceCreate: forceCreate})
 		err = deployManager.Prepare()
+		err = os.Chdir(deployManager.ProjectPath)
+		if err != nil {
+			panic(err)
+		}
 		err = deployManager.Run()
 		//
 

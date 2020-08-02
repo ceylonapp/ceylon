@@ -3,3 +3,4 @@ aredis==1.1.8
 aiohttp==3.6.2
 python-dotenv
 redis==3.5.3
+environs

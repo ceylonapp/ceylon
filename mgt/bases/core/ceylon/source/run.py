@@ -3,17 +3,37 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from datetime import datetime
 from importlib.machinery import SourceFileLoader
 
 import aredis
 import click
 import redis
-import sys
+from environs import Env
 
-redis_host = os.environ.get('REDIS_HOST', '127.0.0.1')
-redis_port = os.environ.get('REDIS_PORT', '6379')
-redis_db = os.environ.get('REDIS_DB', '0')
+agent_name, source_name, stack_name = "", "", ""
+for idx, arg in enumerate(sys.argv):
+    if arg == "--source":
+        source_name = sys.argv[idx + 1]
+    elif arg == "--agent":
+        agent_name = sys.argv[idx + 1]
+    elif arg == "--stack":
+        stack_name = sys.argv[idx + 1]
+
+env = Env()
+# Read .env into os.environ
+if os.path.exists(".env"):
+    env.read_env()
+if os.path.exists(".env.ceylon"):
+    env.read_env(".env.ceylon", recurse=False)
+else:
+    print("path not exits", os.path.abspath(".env.ceylon"))
+# Initialize Redis ENV variables
+stack_name_prefix = f"{stack_name}_" if stack_name != "" else ""
+redis_host = os.environ.get(f'{stack_name_prefix}REDIS_HOST', '127.0.0.1')
+redis_port = os.environ.get(f'{stack_name_prefix}REDIS_PORT', '6379')
+redis_db = os.environ.get(f'{stack_name_prefix}REDIS_DB', '0')
 
 client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
 
@@ -26,7 +46,7 @@ class SysLogger(object):
 
     def write(self, message):
         self.terminal.write(message)
-        self.r.publish("sys_log", json.dumps({
+        self.r.publish(f"{self.name}sys_log", json.dumps({
             "time": f"{datetime.now()}",
             "agent": self.name,
             "message": message
@@ -36,19 +56,8 @@ class SysLogger(object):
         pass
 
 
-agent_name = ""
-source_name = ""
-
-for id, arg in enumerate(sys.argv):
-    if arg == "--source":
-        source_name = sys.argv[id + 1]
-
-    elif arg == "--agent":
-        agent_name = sys.argv[id + 1]
-print(source_name, agent_name)
-
-sys.stdout = SysLogger(name=agent_name)
-print("init agent logger ", source_name, agent_name)
+sys.stdout = SysLogger(name=stack_name_prefix)
+print("init agent logger ", stack_name, source_name, agent_name)
 
 
 async def process_message(source_instance, read_params):
@@ -151,6 +160,7 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
 
 
 @click.command()
+@click.option("--stack", default=None, help="Please define Agent Stack name")
 @click.option("--source", default=None, help="Please define input streams")
 @click.option("--agent", default=None, help="Please define agent class")
 @click.option("--path", default=None, help="Web expose path")
@@ -159,7 +169,7 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
 @click.option("--override/--no-override", default=False, help="Override params by system variable ")
 @click.option("--read-params", default={"name": "Agent Framework Reading"})
 @click.option("--init-params", default={"name": "Agent Framework Init"})
-def run(source, agent, path, expose, type, override, read_params, init_params):
+def run(stack, source, agent, path, expose, type, override, read_params, init_params):
     if override:
         source = os.environ.get('CEYLON_SOURCE')
         agent = os.environ.get('CEYLON_AGENT')
@@ -172,7 +182,8 @@ def run(source, agent, path, expose, type, override, read_params, init_params):
 
     source = f"{source}"
     agent = f"{agent}"
-    print("source ", source, "agent", agent, "read_params", read_params, "init_params", init_params, "path", path,
+    print("Agent Stack ", stack_name, "source ", source, "agent", agent, "read_params", read_params, "init_params",
+          init_params, "path", path,
           "expose", expose, "type", type)
 
     loop = asyncio.get_event_loop()

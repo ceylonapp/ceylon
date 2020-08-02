@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"text/template"
 )
 
 type File struct {
@@ -325,6 +326,29 @@ func addFile(tw *tar.Writer, path string, archivePath string) error {
 	return nil
 }
 
+func addReader(tw *tar.Writer, f *os.File, fileName string) error {
+
+	if stat, err := f.Stat(); err == nil {
+		// now lets create the header as needed for this file within the tarball
+		header := new(tar.Header)
+		header.Name = fileName
+		header.Size = stat.Size()
+		header.Mode = int64(stat.Mode())
+		header.ModTime = stat.ModTime()
+		// write the header to the tarball archive
+		if err := tw.WriteHeader(header); err != nil {
+			panic(err)
+			return err
+		}
+		// copy the file data to the tarball
+		if _, err := io.Copy(tw, f); err != nil {
+			panic(err)
+			return err
+		}
+	}
+	return nil
+}
+
 func ExtractTarGz(source string, target string) error {
 	file, err := os.Open(source)
 
@@ -397,4 +421,61 @@ func ExtractTarArchive(source string, target string, compressed bool) error {
 		targetFile.Close()
 	}
 	return err
+}
+
+func AppendEnvarFile(envars []string, tw *tar.Writer, baseFilePath string) error {
+	_, baseFilePath, _, _ = runtime.Caller(1)
+	envFilePath := path.Join(path.Dir(baseFilePath), "../../../mgt/images/core/.env")
+	content, err := ioutil.ReadFile(envFilePath)
+	if err != nil {
+		println(err.Error())
+		return err
+	}
+	tmpl, err := template.New(".env.ceylon").Parse(string(content))
+	if err != nil {
+		println(err.Error())
+		return err
+	}
+
+	//out := bufio.
+	var tpl bytes.Buffer
+	err = tmpl.Execute(&tpl, struct {
+		Envars []string
+	}{
+		Envars: envars,
+	})
+	if err != nil {
+		println(err.Error())
+		return err
+	}
+
+	f, _ := ioutil.TempFile("", "temp.env.ceylon")
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			println(err.Error())
+
+		}
+		err = os.Remove(f.Name())
+		if err != nil {
+			println(err.Error())
+
+		}
+	}()
+	err = ioutil.WriteFile(f.Name(), tpl.Bytes(), 0644)
+	if err != nil {
+		println(err.Error())
+		return err
+	}
+	err = addReader(tw, f, ".env.ceylon")
+	if err != nil {
+		println(err.Error())
+		return err
+	}
+
+	if err != nil {
+		println(err.Error())
+		return err
+	}
+	return nil
 }

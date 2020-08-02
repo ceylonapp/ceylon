@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -77,16 +78,20 @@ func (dp *VEnvDeployManager) Create(config *CreateSettings) (err error) {
 }
 
 func (dp *VEnvDeployManager) Prepare() error {
-	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "create.bat"), dp.ProjectPath)
-	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe"), "--version")
-	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/pip.exe"), "install", "-r", filepath.Join(dp.ProjectPath, "mgt\\images\\core\\requirements.txt"))
-	runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/pip.exe"), "install", "-r", filepath.Join(dp.ProjectPath, "requirements.txt"))
+	if runtime.GOOS == "windows" {
+		runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "create.bat"), dp.ProjectPath)
+		runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe"), "--version")
+		runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/pip.exe"), "install", "-r", filepath.Join(dp.ProjectPath, "mgt\\images\\core\\requirements.txt"))
+		runCommand(os.Stdout, filepath.Join(dp.ProjectPath, "venv/Scripts/pip.exe"), "install", "-r", filepath.Join(dp.ProjectPath, "requirements.txt"))
+	} else {
+		log.Fatal(fmt.Sprintf("Not yet support for %s", runtime.GOOS))
+	}
 
 	return nil
 }
 
 func runCommand(out io.Writer, command string, args ...string) {
-
+	log.Println(fmt.Sprintf("%s %s", command, args))
 	exeCmd := cmd.NewCmd(command, args...)
 	statusChan := exeCmd.Start()
 	go func() {
@@ -94,7 +99,6 @@ func runCommand(out io.Writer, command string, args ...string) {
 		for _, logVal := range status.Stdout {
 			log.Println("LOG :: ", logVal)
 		}
-		//io.Copy(out, status.Stdout)
 	}()
 	// Check if command is done
 	select {
@@ -107,28 +111,13 @@ func runCommand(out io.Writer, command string, args ...string) {
 	// Block waiting for command to exit, be stopped, or be killed
 	finalStatus := <-statusChan
 	log.Println(finalStatus)
-	//for {
-	//	statusS := <-status
-	//	log.Println(statusS.Stdout)
-	//}
-	//// Print each line of STDOUT from Cmd
-	//for _, line := range status.Stdout {
-	//	fmt.Println(line)
-	//}
-	////log.Println("Executing...", command, args)
-	////cmd := exec.Command(command, args...)
-	////stdout, _ := cmd.StdoutPipe()
-	////stderr, _ := cmd.StderrPipe()
-	////cmd.Start()
-	////io.Copy(out, stdout)
-	////io.Copy(out, stderr)
-	////cmd.Wait()
 }
 
 func (dp *VEnvDeployManager) agentWorker(wg *sync.WaitGroup, agent config.Agent, out io.Writer) {
 	defer wg.Done()
 
 	agentArgs := []string{filepath.Join(dp.ProjectPath, "ceylon/source/run.py")}
+	agentArgs = append(agentArgs, "--stack", dp.Config.Name)
 	agentArgs = append(agentArgs, "--source", agent.Source)
 	agentArgs = append(agentArgs, "--agent", agent.Name)
 
@@ -143,8 +132,12 @@ func (dp *VEnvDeployManager) agentWorker(wg *sync.WaitGroup, agent config.Agent,
 		agentArgs = append(agentArgs, "--path", agent.Path)
 	}
 
-	prepareFilePath := filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe")
-	runCommand(out, prepareFilePath, agentArgs...)
+	if runtime.GOOS == "windows" {
+		prepareFilePath := filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe")
+		runCommand(out, prepareFilePath, agentArgs...)
+	} else {
+		log.Fatal(fmt.Sprintf("Not yet support for %s", runtime.GOOS))
+	}
 }
 
 func (dp *VEnvDeployManager) Run() error {
@@ -154,9 +147,7 @@ func (dp *VEnvDeployManager) Run() error {
 		wg.Add(1)
 		go dp.agentWorker(&wg, agent, os.Stdout)
 	}
-	fmt.Println("Main: Waiting for workers to finish")
+	fmt.Println("Start agents")
 	wg.Wait()
-	fmt.Println("Main: Completed")
-
 	return nil
 }
