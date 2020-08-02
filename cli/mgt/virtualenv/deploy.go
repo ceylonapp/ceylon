@@ -66,7 +66,7 @@ func (dp *VEnvDeployManager) Init() {
 }
 
 func (dp *VEnvDeployManager) Create(config *CreateSettings) (err error) {
-	projectLocation, err := dp.env.initiateLocation()
+	projectLocation, err := dp.env.initiateLocation(config.ForceCreate)
 	if err != nil {
 		panic(err)
 		return err

@@ -19,7 +19,7 @@ type VirtualEnvService struct {
 	DeployConfig *config.DeployConfig
 }
 
-func (s *VirtualEnvService) initiateLocation() (string, error) {
+func (s *VirtualEnvService) initiateLocation(forceDelete bool) (string, error) {
 	projectsRuntimePath := path.Join(*s.BaseLocation, fmt.Sprintf("build"))
 	projectDir := path.Join(projectsRuntimePath, fmt.Sprintf("%s", s.DeployConfig.Name))
 
@@ -31,7 +31,7 @@ func (s *VirtualEnvService) initiateLocation() (string, error) {
 		if err != nil {
 			panic(err)
 		}
-	} else {
+	} else if forceDelete {
 		err := fileutil.RemoveContents(projectDir)
 		if err != nil {
 			log.Println(err.Error())
