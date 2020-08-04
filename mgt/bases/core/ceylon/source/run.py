@@ -6,11 +6,12 @@ import os
 import sys
 from datetime import datetime
 from importlib.machinery import SourceFileLoader
-
+from typing import Any
 import aredis
 import click
 import redis
 from environs import Env
+import pickle
 
 agent_name, source_name, stack_name = "", "", ""
 for idx, arg in enumerate(sys.argv):
@@ -35,7 +36,9 @@ redis_host = os.environ.get(f'{stack_name_prefix}REDIS_HOST', '127.0.0.1')
 redis_port = os.environ.get(f'{stack_name_prefix}REDIS_PORT', '6379')
 redis_db = os.environ.get(f'{stack_name_prefix}REDIS_DB', '0')
 
-client = aredis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
+client = aredis.StrictRedis(host=redis_host,
+                            port=int(redis_port),
+                            db=int(redis_db))
 
 
 class SysLogger(object):
@@ -46,11 +49,13 @@ class SysLogger(object):
 
     def write(self, message):
         self.terminal.write(message)
-        self.r.publish(f"{self.name}sys_log", json.dumps({
-            "time": f"{datetime.now()}",
-            "agent": self.name,
-            "message": message
-        }))
+        self.r.publish(
+            f"{self.name}sys_log",
+            json.dumps({
+                "time": f"{datetime.now()}",
+                "agent": self.name,
+                "message": message
+            }))
 
     def flush(self):
         pass
@@ -64,37 +69,45 @@ async def process_message(source_instance, read_params):
     pub_sub = client.pubsub()
     subscribes = []
     if hasattr(source_instance, "__dependents__"):
+        #print(f"All __dependents__ {source_instance.__dependents__}")
         for r in source_instance.__dependents__:
-            subscribes.append(r.__name__)
+            subscribes.append(r if type(r)==str else r.__name__)
 
         await pub_sub.subscribe(*subscribes)
         while True:
             message = await pub_sub.get_message()
-
             if message:
                 if type(message["data"]) != int:
                     channel_name = message['channel'].decode("UTF-8")
-                    message_body = message["data"].decode("UTF-8")
-                    message_body = message_body.replace("'", '"')
-                    await source_instance.accept_message(channel_name, json.loads(message_body))
+                    message_body = message["data"]
+                    await source_instance.accept_message(
+                        channel_name,pickle.loads(message_body))
+    else:                    
+        print("No __dependents__ found please check your agent again")                
 
-
-async def run_agent(source, agent, read_params, init_params, path=None, expose=None, type="http"):
-    sys.path.append(os.path.abspath(os.getcwd()))  # append source path to system path
+async def run_agent(source,
+                    agent,
+                    read_params,
+                    init_params,
+                    path=None,
+                    expose=None,
+                    type="http"):
+    sys.path.append(os.path.abspath(
+        os.getcwd()))  # append source path to system path
     logging.basicConfig(level=logging.DEBUG)
 
     async def response_stream(*args, **kwargs):
-        await client.publish(agent, kwargs)
+        await client.publish(agent, pickle.dumps(kwargs))
 
     def ws_response_stream(ws):
         async def _response_stream(*args, **kwargs):
+            await client.publish(agent, pickle.dumps(kwargs))
             await ws.send_json(kwargs)
-            await client.publish(agent, kwargs)
 
         return _response_stream
 
     foo = SourceFileLoader("", f"{os.getcwd()}/{source}").load_module()
-
+    print(init_params)
     source_class = getattr(foo, agent)
     source_instance = source_class(config=init_params)
     source_class.send_message = response_stream
@@ -102,20 +115,19 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
     task = asyncio.create_task(process_message(source_instance, read_params))
 
     if not path and not expose:
-        await source_instance.run_agent(request=read_params)
+        asyncio.gather(source_instance.run_agent(request=read_params),task)
+
     elif expose and path:
         from aiohttp import web, WSMsgType
         from aiohttp.web_request import Request
+        import aiohttp_cors
 
         async def handle(req: Request):
             json_body = await req.json()
 
             response_body = await source_instance.run_agent(request=json_body)
             response_body = {} if not response_body else response_body
-            return web.json_response({
-                "status": "success",
-                **response_body
-            })
+            return web.json_response({"status": "success", **response_body})
 
         async def websocket_handler(request):
 
@@ -128,10 +140,12 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
                         await ws.close()
                     else:
                         json_body = json.loads(msg.data)
-                        source_instance.send_message = ws_response_stream(ws=ws)
+                        source_instance.send_message = ws_response_stream(
+                            ws=ws)
                         if task:
                             task.cancel()
-                        task = asyncio.create_task(source_instance.run_agent(request=json_body))
+                        task = asyncio.create_task(
+                            source_instance.run_agent(request=json_body))
 
                         # response_body = await
                         # await ws.send_json(response_body)
@@ -144,7 +158,20 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
         app = web.Application()
 
         if type == "http":
+            cors = aiohttp_cors.setup(app,
+                                      defaults={
+                                          "*":
+                                          aiohttp_cors.ResourceOptions(
+                                              allow_credentials=True,
+                                              expose_headers="*",
+                                              allow_headers="*",
+                                          )
+                                      })
             app.add_routes([web.post(f'{path}', handle)])
+
+            for route in list(app.router.routes()):
+                cors.add(route)
+
         elif type == "ws":
             app.add_routes([web.get(f'{path}', websocket_handler)])
 
@@ -156,7 +183,7 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
         await asyncio.Event().wait()
 
     await task
-    print(f" {agent}  finished")
+    print(f" {agent}  finished {task}")
 
 
 @click.command()
@@ -165,11 +192,16 @@ async def run_agent(source, agent, read_params, init_params, path=None, expose=N
 @click.option("--agent", default=None, help="Please define agent class")
 @click.option("--path", default=None, help="Web expose path")
 @click.option("--expose", default=None, help="Web expose port")
-@click.option("--type", default="http", help="Type can be ws(WebSocket) or http")
-@click.option("--override/--no-override", default=False, help="Override params by system variable ")
-@click.option("--read-params", default={"name": "Agent Framework Reading"})
-@click.option("--init-params", default={"name": "Agent Framework Init"})
-def run(stack, source, agent, path, expose, type, override, read_params, init_params):
+@click.option("--type",
+              default="http",
+              help="Type can be ws(WebSocket) or http")
+@click.option("--override/--no-override",
+              default=False,
+              help="Override params by system variable ")
+@click.option("--init-params",multiple=True, default=[("name","agent_init")],type=click.Tuple([str, str]))
+@click.option("--read-params",multiple=True, default=[("name","agent_reading")],type=click.Tuple([str, str]))
+def run(stack, source, agent, path, expose, type, override, read_params,
+        init_params):
     if override:
         source = os.environ.get('CEYLON_SOURCE')
         agent = os.environ.get('CEYLON_AGENT')
@@ -182,12 +214,20 @@ def run(stack, source, agent, path, expose, type, override, read_params, init_pa
 
     source = f"{source}"
     agent = f"{agent}"
-    print("Agent Stack ", stack_name, "source ", source, "agent", agent, "read_params", read_params, "init_params",
-          init_params, "path", path,
+
+    if init_params:
+        init_params = dict(init_params)
+
+    if read_params:
+        read_params = dict(read_params)
+
+    print("Agent Stack ", stack_name, "source ", source, "agent", agent,
+          "read_params", read_params, "init_params", init_params, "path", path,
           "expose", expose, "type", type)
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_agent(source, agent, read_params, init_params, path, expose, type))
+    loop.run_until_complete(
+        run_agent(source, agent, read_params, init_params, path, expose, type))
 
 
 if __name__ == '__main__':
