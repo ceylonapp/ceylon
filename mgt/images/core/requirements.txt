@@ -4,3 +4,4 @@ aiohttp==3.6.2
 python-dotenv
 redis==3.5.3
 environs
+aiohttp_cors==0.7.0

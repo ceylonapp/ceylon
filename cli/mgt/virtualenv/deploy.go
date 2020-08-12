@@ -91,30 +91,53 @@ func (dp *VEnvDeployManager) Prepare() error {
 }
 
 func runCommand(out io.Writer, command string, args ...string) {
-	log.Println(fmt.Sprintf("%s %s", command, args))
-	exeCmd := cmd.NewCmd(command, args...)
-	statusChan := exeCmd.Start()
-	go func() {
-		status := exeCmd.Status()
-		for _, logVal := range status.Stdout {
-			log.Println("LOG :: ", logVal)
-		}
-	}()
-	// Check if command is done
-	select {
-	case finalStatus := <-statusChan:
-		log.Println(finalStatus)
-	default:
-		log.Println(statusChan)
+	commandStr := ""
+	for _, arg := range args {
+		commandStr = commandStr + " " + arg
 	}
 
-	// Block waiting for command to exit, be stopped, or be killed
-	finalStatus := <-statusChan
-	log.Println(finalStatus)
+	log.Println(fmt.Sprintf("%s %s\n", command, commandStr))
+	cmdOptions := cmd.Options{
+		Buffered:  false,
+		Streaming: true,
+	}
+
+	// Create Cmd with options
+	envCmd := cmd.NewCmdOptions(cmdOptions, command, args...)
+
+	// Print STDOUT and STDERR lines streaming from Cmd
+	doneChan := make(chan struct{})
+	go func() {
+		defer close(doneChan)
+		// Done when both channels have been closed
+		// https://dave.cheney.net/2013/04/30/curious-channels
+		for envCmd.Stdout != nil || envCmd.Stderr != nil {
+			select {
+			case line, open := <-envCmd.Stdout:
+				if !open {
+					envCmd.Stdout = nil
+					continue
+				}
+				fmt.Println(line)
+			case line, open := <-envCmd.Stderr:
+				if !open {
+					envCmd.Stderr = nil
+					continue
+				}
+				fmt.Fprintln(os.Stderr, line)
+			}
+		}
+	}()
+	// Run and wait for Cmd to return, discard Status
+	<-envCmd.Start()
+
+	// Wait for goroutine to print everything
+	<-doneChan
+
 }
 
 func (dp *VEnvDeployManager) agentWorker(wg *sync.WaitGroup, agent config.Agent, out io.Writer) {
-	defer wg.Done()
+	//defer
 
 	agentArgs := []string{filepath.Join(dp.ProjectPath, "ceylon/source/run.py")}
 	agentArgs = append(agentArgs, "--stack", dp.Config.Name)
@@ -132,19 +155,31 @@ func (dp *VEnvDeployManager) agentWorker(wg *sync.WaitGroup, agent config.Agent,
 		agentArgs = append(agentArgs, "--path", agent.Path)
 	}
 
+	if agent.InitParams != nil {
+		for k, v := range agent.InitParams {
+			agentArgs = append(agentArgs, fmt.Sprintf("--init-params %s %s", k, v))
+		}
+	}
+
 	if runtime.GOOS == "windows" {
 		prepareFilePath := filepath.Join(dp.ProjectPath, "venv/Scripts/python.exe")
 		runCommand(out, prepareFilePath, agentArgs...)
 	} else {
 		log.Fatal(fmt.Sprintf("Not yet support for %s", runtime.GOOS))
 	}
+	fmt.Println("Agent process done", agent.Name)
+	wg.Done()
 }
 
 func (dp *VEnvDeployManager) Run() error {
 	var wg sync.WaitGroup
+
+	wg.Add(len(dp.Config.Stack.Agents))
 	//var out io.Reader
-	for _, agent := range dp.Config.Stack.Agents {
-		wg.Add(1)
+	for _, kv := range dp.Config.Stack.Agents.Order() {
+		agent := kv.Value
+		agentName := kv.Key
+		log.Print("Agent ", agentName, "Starting...")
 		go dp.agentWorker(&wg, agent, os.Stdout)
 	}
 	fmt.Println("Start agents")

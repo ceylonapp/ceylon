@@ -2,24 +2,31 @@ package config
 
 import (
 	"bytes"
-	"fmt"
 	"gopkg.in/yaml.v2"
 	"io"
 	"log"
 	"os"
+	"sort"
 )
 
 type Agent struct {
-	Source  string `yaml:"source"`
-	Name    string `yaml:"name"`
-	Expose  string `yaml:"expose"`
-	Path    string `yaml:"path"`
-	Type    string `yaml:"type"`
-	Version string `yaml:"version"`
+	Source     string            `yaml:"source"`
+	Name       string            `yaml:"name"`
+	Expose     string            `yaml:"expose"`
+	Path       string            `yaml:"path"`
+	Type       string            `yaml:"type"`
+	Version    string            `yaml:"version"`
+	Order      int               `yaml:"order"`
+	InitParams map[string]string `yaml:"init_params,flow"`
+}
+type AgentMap map[string]Agent
+type Kv struct {
+	Key   string
+	Value Agent
 }
 type Stack struct {
-	Ports  []string         `yaml:"ports,flow"`
-	Agents map[string]Agent `yaml:"agents,flow"`
+	Ports  []string `yaml:"ports,flow"`
+	Agents AgentMap `yaml:"agents,flow"`
 }
 type DeployConfig struct {
 	Name   string   `yaml:"name"`
@@ -74,13 +81,18 @@ func NewConfig(configPath string) (*DeployConfig, error) {
 
 	return config, nil
 }
-func validateConfigPath(path string) error {
-	s, err := os.Stat(path)
-	if err != nil {
-		return err
+
+func (amap AgentMap) Order() (agentList []Kv) {
+	for k, v := range amap {
+		agentList = append(agentList, Kv{
+			Key:   k,
+			Value: v,
+		})
 	}
-	if s.IsDir() {
-		return fmt.Errorf("'%s' is a directory, not a normal file", path)
-	}
-	return nil
+	sort.Slice(agentList, func(i, j int) bool {
+		return agentList[i].Value.Order > agentList[j].Value.Order
+	})
+
+	return
+
 }

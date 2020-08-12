@@ -3,15 +3,15 @@ import asyncio
 import json
 import logging
 import os
+import pickle
 import sys
 from datetime import datetime
 from importlib.machinery import SourceFileLoader
-from typing import Any
+
 import aredis
 import click
 import redis
 from environs import Env
-import pickle
 
 agent_name, source_name, stack_name = "", "", ""
 for idx, arg in enumerate(sys.argv):
@@ -46,11 +46,13 @@ class SysLogger(object):
         self.name = name
         self.terminal = sys.stdout
         self.r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+        self.channel_name = f"{self.name}sys_log"
+        self.terminal.write(f"Channel Name ::: {self.channel_name}")
 
     def write(self, message):
         self.terminal.write(message)
         self.r.publish(
-            f"{self.name}sys_log",
+            self.channel_name,
             json.dumps({
                 "time": f"{datetime.now()}",
                 "agent": self.name,
@@ -69,9 +71,9 @@ async def process_message(source_instance, read_params):
     pub_sub = client.pubsub()
     subscribes = []
     if hasattr(source_instance, "__dependents__"):
-        #print(f"All __dependents__ {source_instance.__dependents__}")
+        # print(f"All __dependents__ {source_instance.__dependents__}")
         for r in source_instance.__dependents__:
-            subscribes.append(r if type(r)==str else r.__name__)
+            subscribes.append(r if type(r) == str else r.__name__)
 
         await pub_sub.subscribe(*subscribes)
         while True:
@@ -81,9 +83,10 @@ async def process_message(source_instance, read_params):
                     channel_name = message['channel'].decode("UTF-8")
                     message_body = message["data"]
                     await source_instance.accept_message(
-                        channel_name,pickle.loads(message_body))
-    else:                    
-        print("No __dependents__ found please check your agent again")                
+                        channel_name, pickle.loads(message_body))
+    else:
+        print("No __dependents__ found please check your agent again")
+
 
 async def run_agent(source,
                     agent,
@@ -115,7 +118,13 @@ async def run_agent(source,
     task = asyncio.create_task(process_message(source_instance, read_params))
 
     if not path and not expose:
-        asyncio.gather(source_instance.run_agent(request=read_params),task)
+        async def run_agent_process():
+            print("run_agent_process")
+            await source_instance.run_agent(request=read_params)
+
+        task_run_agent = asyncio.create_task(run_agent_process())
+        result = await asyncio.gather(task_run_agent, task)
+        print(result)
 
     elif expose and path:
         from aiohttp import web, WSMsgType
@@ -161,11 +170,11 @@ async def run_agent(source,
             cors = aiohttp_cors.setup(app,
                                       defaults={
                                           "*":
-                                          aiohttp_cors.ResourceOptions(
-                                              allow_credentials=True,
-                                              expose_headers="*",
-                                              allow_headers="*",
-                                          )
+                                              aiohttp_cors.ResourceOptions(
+                                                  allow_credentials=True,
+                                                  expose_headers="*",
+                                                  allow_headers="*",
+                                              )
                                       })
             app.add_routes([web.post(f'{path}', handle)])
 
@@ -198,8 +207,8 @@ async def run_agent(source,
 @click.option("--override/--no-override",
               default=False,
               help="Override params by system variable ")
-@click.option("--init-params",multiple=True, default=[("name","agent_init")],type=click.Tuple([str, str]))
-@click.option("--read-params",multiple=True, default=[("name","agent_reading")],type=click.Tuple([str, str]))
+@click.option("--init-params", multiple=True, default=[("name", "agent_init")], type=click.Tuple([str, str]))
+@click.option("--read-params", multiple=True, default=[("name", "agent_reading")], type=click.Tuple([str, str]))
 def run(stack, source, agent, path, expose, type, override, read_params,
         init_params):
     if override:
@@ -225,9 +234,10 @@ def run(stack, source, agent, path, expose, type, override, read_params,
           "read_params", read_params, "init_params", init_params, "path", path,
           "expose", expose, "type", type)
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(
-        run_agent(source, agent, read_params, init_params, path, expose, type))
+    # loop = asyncio.get_event_loop()
+    # loop.run_until_complete(
+    # run_agent(source, agent, read_params, init_params, path, expose, type))
+    asyncio.run(run_agent(source, agent, read_params, init_params, path, expose, type))
 
 
 if __name__ == '__main__':
